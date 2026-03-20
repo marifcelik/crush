@@ -173,6 +173,16 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(404, 500).
 			Handle(c.handleGetWorkspaceSessionMessages),
 
+		apigen.Delete("/v1/workspaces/{id}/sessions/{sid}/messages/{mid}").
+			Summary("Delete messages after a given message").
+			Description("Deletes every message that comes after the given message ID in the session, used to undo the last message exchange.").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			PathParam("mid", "Message ID").
+			Fails(404, 500).
+			Handle(c.handleDeleteWorkspaceSessionMessagesAfter),
+
 		apigen.Get("/v1/workspaces/{id}/sessions/{sid}/messages/user").
 			Summary("Get user messages for session").
 			Tags("sessions").
