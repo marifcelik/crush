@@ -183,6 +183,15 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(404, 500).
 			Handle(c.handleDeleteWorkspaceSessionMessagesAfter),
 
+		apigen.Post("/v1/workspaces/{id}/sessions/messages/restore").
+			Summary("Restore messages into a session").
+			Description("Restores previously deleted messages back into the session, used to redo an undo.").
+			Tags("sessions").
+			PathParam("id", "Workspace ID").
+			Accepts(proto.RestoreMessagesRequest{}).
+			Fails(400, 404, 500).
+			Handle(c.handleRestoreWorkspaceSessionMessages),
+
 		apigen.Get("/v1/workspaces/{id}/sessions/{sid}/messages/user").
 			Summary("Get user messages for session").
 			Tags("sessions").
