@@ -451,6 +451,14 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		NewCommandItem(c.com.Styles, "new_session", "New Session", "ctrl+n", ActionNewSession{}).WithAliases("clear"),
 		NewCommandItem(c.com.Styles, "switch_session", "Sessions", "ctrl+s", ActionOpenDialog{SessionsID}),
 		NewCommandItem(c.com.Styles, "switch_model", "Switch Model", "ctrl+l", ActionOpenDialog{ModelsID}),
+		NewCommandItem(c.com.Styles, "set_plan_model", "Set Plan Mode Model", "", ActionOpenModelsDialog{ModelType: ModelTypePlan}),
+	}
+
+	// Show the clear command only while an override is actually set.
+	if cfg := c.com.Config(); cfg != nil {
+		if cfg.PlanModePlanModel() != nil {
+			commands = append(commands, NewCommandItem(c.com.Styles, "clear_plan_model", "Clear Plan Mode Model", "", ActionClearPlanModeModel{Slot: config.PlanModeSlotPlan}))
+		}
 	}
 
 	// Only show compact command if there's an active session

@@ -191,7 +191,7 @@ Usage:
 
 ### model
 
-Manage custom models and the large/small model slots. Model references use the
+Manage custom models and the model slots. Model references use the
 same `<provider>/<id>` form printed by `crush models`.
 
 ```text
@@ -204,6 +204,7 @@ Available Commands:
   rm        Alias for remove
   large     Set or print the large model
   small     Set or print the small model
+  plan      Set or print the plan-mode model override
 ```
 
 #### `model add`
@@ -263,6 +264,27 @@ Flags:
 model large openai/gpt-4o --think
 echo "coding with: $(model large)"   # prints: openai/gpt-4o
 ```
+
+#### `model plan`
+
+Set the plan-mode model override (written to `plan_mode.plan_model`). With
+no model argument, print the current override. Accepts the same flags as
+`model large`.
+
+`model plan` selects the model used while in plan mode. When unset, plan
+mode uses the regular large model. The coding model after a plan completes
+is always the regular large model you selected.
+
+An override that references an unknown provider or model is ignored at
+load time and the regular large model is used instead.
+
+```bash
+model plan anthropic/claude-4.5
+```
+
+This override can also be set from the command palette (**Ctrl+P**):
+"Set Plan Mode Model" opens the model picker on the plan slot, and
+"Clear Plan Mode Model" (shown only while set) drops the override.
 
 ### mcp
 

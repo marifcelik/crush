@@ -145,6 +145,7 @@ func Load(workingDir, dataDir string, debug bool) (*ConfigStore, error) {
 	}
 	cfg.Models[SelectedModelTypeLarge] = resolved.Large
 	cfg.Models[SelectedModelTypeSmall] = resolved.Small
+	resolvePlanModeModels(cfg)
 
 	// Persist any fallback corrections while we still hold writeMu.
 	if resolved.LargeFallback {
@@ -918,6 +919,43 @@ func resolveSelectedModels(cfg *Config, knownProviders []catwalk.Provider) (reso
 	result.Large = large
 	result.Small = small
 	return result, nil
+}
+
+// resolvePlanModeModels validates the plan_mode model overrides against the
+// provider catalog, filling in catalog defaults (max tokens, reasoning
+// effort) the same way resolveSelectedModels does for the large slot. An
+// override that is unset or refers to an unknown provider/model is dropped
+// (set to nil) so the regular large model applies instead.
+func resolvePlanModeModels(cfg *Config) {
+	if cfg.PlanMode == nil {
+		return
+	}
+	cfg.PlanMode.PlanModel = resolvePlanModelOverride(cfg, cfg.PlanMode.PlanModel, "plan_mode.plan_model")
+}
+
+// resolvePlanModelOverride resolves a single plan_mode model override.
+// Returns nil when the override should be ignored.
+func resolvePlanModelOverride(cfg *Config, sel *SelectedModel, field string) *SelectedModel {
+	if sel == nil {
+		return nil
+	}
+	if sel.Provider == "" || sel.Model == "" {
+		slog.Warn("Ignoring incomplete plan mode model override, both provider and model are required", "field", field)
+		return nil
+	}
+	model := cfg.GetModel(sel.Provider, sel.Model)
+	if model == nil {
+		slog.Warn("Ignoring plan mode model override that is not in the provider catalog, using the regular model", "field", field, "provider", sel.Provider, "model", sel.Model)
+		return nil
+	}
+	resolved := *sel
+	if resolved.MaxTokens == 0 {
+		resolved.MaxTokens = model.DefaultMaxTokens
+	}
+	if resolved.ReasoningEffort == "" {
+		resolved.ReasoningEffort = model.DefaultReasoningEffort
+	}
+	return &resolved
 }
 
 // lookupConfigs searches config files starting at cwd and walking up

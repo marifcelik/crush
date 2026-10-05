@@ -38,9 +38,12 @@ type ActionSelectSession struct {
 
 // ActionSelectModel is a message indicating a model has been selected.
 type ActionSelectModel struct {
-	Provider       catwalk.Provider
-	Model          config.SelectedModel
-	ModelType      config.SelectedModelType
+	Provider  catwalk.Provider
+	Model     config.SelectedModel
+	ModelType config.SelectedModelType
+	// Slot is the plan_mode override this selection targets. Empty means
+	// the regular large/small model slots.
+	Slot           config.PlanModeSlot
 	ReAuthenticate bool
 }
 
@@ -171,7 +174,21 @@ type (
 		Provider  catwalk.Provider
 		Model     config.SelectedModel
 		ModelType config.SelectedModelType
+		Slot      config.PlanModeSlot
 		UseOAuth  bool
+	}
+
+	// ActionOpenModelsDialog opens the models dialog preset to a model
+	// type (e.g. the plan_mode slots). The zero value opens the regular
+	// large slot.
+	ActionOpenModelsDialog struct {
+		ModelType ModelType
+	}
+
+	// ActionClearPlanModeModel clears a plan_mode model override so the
+	// regular large model applies again.
+	ActionClearPlanModeModel struct {
+		Slot config.PlanModeSlot
 	}
 )
 

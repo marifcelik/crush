@@ -822,3 +822,40 @@ func TestCoordinatorSetMainAgent(t *testing.T) {
 		assert.ErrorIs(t, err, errMainAgentNotFound)
 	})
 }
+
+func TestLargeModelCfgFor(t *testing.T) {
+	env := testEnv(t)
+	cfg, err := config.Init(env.workingDir, "", false)
+	require.NoError(t, err)
+
+	regular := config.SelectedModel{Provider: "testprov", Model: "regular"}
+	cfg.Config().Models[config.SelectedModelTypeLarge] = regular
+
+	coord := &coordinator{cfg: cfg}
+
+	// Without overrides every agent uses the regular large model.
+	for _, name := range []string{config.AgentCoder, config.AgentPlan, config.AgentTask, ""} {
+		got, ok := coord.largeModelCfgFor(name)
+		require.True(t, ok)
+		require.Equal(t, regular, got)
+	}
+
+	plan := config.SelectedModel{Provider: "testprov", Model: "planner"}
+	cfg.Config().PlanMode = &config.PlanModeOptions{
+		PlanModel: &plan,
+	}
+
+	got, ok := coord.largeModelCfgFor(config.AgentPlan)
+	require.True(t, ok)
+	require.Equal(t, plan, got)
+
+	// The coder agent keeps the regular model (no coding override).
+	got, ok = coord.largeModelCfgFor(config.AgentCoder)
+	require.True(t, ok)
+	require.Equal(t, regular, got)
+
+	// Sub-agents and unnamed callers keep the regular model.
+	got, ok = coord.largeModelCfgFor(config.AgentTask)
+	require.True(t, ok)
+	require.Equal(t, regular, got)
+}

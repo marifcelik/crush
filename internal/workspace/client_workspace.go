@@ -542,6 +542,14 @@ func (w *ClientWorkspace) UpdatePreferredModel(scope config.Scope, modelType con
 	return err
 }
 
+func (w *ClientWorkspace) SetPlanModeModel(scope config.Scope, slot config.PlanModeSlot, model *config.SelectedModel) error {
+	err := w.client.SetPlanModeModel(context.Background(), w.workspaceID(), scope, slot, model)
+	if err == nil {
+		w.refreshWorkspace()
+	}
+	return err
+}
+
 func (w *ClientWorkspace) SetCompactMode(scope config.Scope, enabled bool) error {
 	err := w.client.SetCompactMode(context.Background(), w.workspaceID(), scope, enabled)
 	if err == nil {

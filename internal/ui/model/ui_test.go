@@ -151,6 +151,10 @@ func (w *testWorkspace) UpdateAgentModel(context.Context) error {
 	return nil
 }
 
+func (w *testWorkspace) AgentModel() workspace.AgentModel {
+	return workspace.AgentModel{}
+}
+
 func (w *testWorkspace) PermissionSkipRequests() bool { return w.yolo }
 
 func (w *testWorkspace) PermissionSetSkipRequests(skip bool) { w.yolo = skip }

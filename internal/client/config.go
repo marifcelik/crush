@@ -61,6 +61,24 @@ func (c *Client) UpdatePreferredModel(ctx context.Context, id string, scope conf
 	return nil
 }
 
+// SetPlanModeModel sets or clears a plan_mode model override on the
+// server. A nil model clears the override.
+func (c *Client) SetPlanModeModel(ctx context.Context, id string, scope config.Scope, slot config.PlanModeSlot, model *config.SelectedModel) error {
+	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/plan-mode-model", id), nil, jsonBody(struct {
+		Scope config.Scope          `json:"scope"`
+		Slot  config.PlanModeSlot   `json:"slot"`
+		Model *config.SelectedModel `json:"model"`
+	}{Scope: scope, Slot: slot, Model: model}), http.Header{"Content-Type": []string{"application/json"}})
+	if err != nil {
+		return fmt.Errorf("failed to set plan mode model: %w", err)
+	}
+	defer rsp.Body.Close()
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to set plan mode model: status code %d", rsp.StatusCode)
+	}
+	return nil
+}
+
 // SetCompactMode sets compact mode on the server.
 func (c *Client) SetCompactMode(ctx context.Context, id string, scope config.Scope, enabled bool) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/config/compact", id), nil, jsonBody(struct {

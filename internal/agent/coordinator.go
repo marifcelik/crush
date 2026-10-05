@@ -748,7 +748,7 @@ func mergeCallOptions(model Model, cfg config.ProviderConfig) (fantasy.ProviderO
 }
 
 func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, agent config.Agent, isSubAgent bool) (SessionAgent, error) {
-	large, small, err := c.buildAgentModels(ctx, isSubAgent)
+	large, small, err := c.buildAgentModels(ctx, agent.ID, isSubAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -928,9 +928,28 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	return filteredTools, nil
 }
 
-// TODO: when we support multiple agents we need to change this so that we pass in the agent specific model config
-func (c *coordinator) buildAgentModels(ctx context.Context, isSubAgent bool) (Model, Model, error) {
+// largeModelCfgFor returns the large-model selection to use for the named
+// agent. The plan agent uses plan_mode.plan_model when configured, so plan
+// mode can run on a different model than coding. Coding (and any other
+// agent, sub-agents, or an empty name) uses the regular large model. An
+// unset or invalid override also falls back to the regular large model.
+func (c *coordinator) largeModelCfgFor(agentName string) (config.SelectedModel, bool) {
+	var override *config.SelectedModel
+	if agentName == config.AgentPlan {
+		override = c.cfg.Config().PlanModePlanModel()
+	}
+	if override != nil {
+		return *override, true
+	}
 	largeModelCfg, ok := c.cfg.Config().Models[config.SelectedModelTypeLarge]
+	return largeModelCfg, ok
+}
+
+// buildAgentModels builds the model pair for the named agent. agentName
+// selects the plan_mode overrides (see largeModelCfgFor); an empty name
+// always uses the regular large model.
+func (c *coordinator) buildAgentModels(ctx context.Context, agentName string, isSubAgent bool) (Model, Model, error) {
+	largeModelCfg, ok := c.largeModelCfgFor(agentName)
 	if !ok {
 		return Model{}, Model{}, errLargeModelNotSelected
 	}
@@ -1399,7 +1418,7 @@ func (c *coordinator) UpdateModels(ctx context.Context) error {
 // given agent from the current config.
 func (c *coordinator) updateAgentModels(ctx context.Context, agent SessionAgent, name string) error {
 	// build the models again so we make sure we get the latest config
-	large, small, err := c.buildAgentModels(ctx, false)
+	large, small, err := c.buildAgentModels(ctx, name, false)
 	if err != nil {
 		return err
 	}

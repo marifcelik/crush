@@ -430,6 +430,14 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(400, 404, 500).
 			Handle(c.handlePostWorkspaceConfigModel),
 
+		apigen.Post("/v1/workspaces/{id}/config/plan-mode-model").
+			Summary("Set or clear a plan mode model override").
+			Tags("config").
+			PathParam("id", "Workspace ID").
+			Accepts(proto.ConfigPlanModeModelRequest{}).
+			Fails(400, 404, 500).
+			Handle(c.handlePostWorkspaceConfigPlanModeModel),
+
 		apigen.Post("/v1/workspaces/{id}/config/compact").
 			Summary("Set compact mode").
 			Tags("config").

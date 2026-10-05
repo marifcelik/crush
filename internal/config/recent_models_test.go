@@ -156,3 +156,33 @@ func TestUpdatePreferredModel_TypeIsolation(t *testing.T) {
 	require.Len(t, store.Config().RecentModels[SelectedModelTypeSmall], 1)
 	require.Equal(t, smallModel, store.Config().RecentModels[SelectedModelTypeSmall][0])
 }
+
+func TestSetPlanModeModel_SetsAndClears(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfg := &Config{}
+	cfg.setDefaults(dir, "")
+	store := testStoreWithPath(cfg, dir)
+
+	plan := SelectedModel{Provider: "anthropic", Model: "claude-4.5"}
+	require.NoError(t, store.SetPlanModeModel(ScopeGlobal, PlanModeSlotPlan, &plan))
+	require.NotNil(t, store.Config().PlanMode)
+	require.Equal(t, &plan, store.Config().PlanMode.PlanModel)
+
+	// Clearing the slot drops the override.
+	require.NoError(t, store.SetPlanModeModel(ScopeGlobal, PlanModeSlotPlan, nil))
+	require.Nil(t, store.Config().PlanMode.PlanModel)
+}
+
+func TestSetPlanModeModel_RejectsInvalidSlot(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	cfg := &Config{}
+	cfg.setDefaults(dir, "")
+	store := testStoreWithPath(cfg, dir)
+
+	m := SelectedModel{Provider: "openai", Model: "gpt-5.1"}
+	require.Error(t, store.SetPlanModeModel(ScopeGlobal, "bogus", &m))
+}
