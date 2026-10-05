@@ -2547,3 +2547,55 @@ func TestConfig_LoadFromBytes_EnvMerge(t *testing.T) {
 	require.Equal(t, "second", loadedConfig.Env["AWS_PROFILE"])
 	require.Equal(t, "us-east-1", loadedConfig.Env["AWS_REGION"])
 }
+
+func TestResolvePlanModeModels(t *testing.T) {
+	newCfg := func() *Config {
+		cfg := &Config{
+			Providers: csync.NewMap[string, ProviderConfig](),
+		}
+		cfg.Providers.Set("openai", ProviderConfig{
+			ID: "openai",
+			Models: []catwalk.Model{
+				{ID: "gpt-a", DefaultMaxTokens: 4096, DefaultReasoningEffort: "high"},
+				{ID: "gpt-b", DefaultMaxTokens: 8192},
+			},
+		})
+		return cfg
+	}
+
+	t.Run("unfilled defaults are backfilled from the catalog", func(t *testing.T) {
+		cfg := newCfg()
+		cfg.PlanMode = &PlanModeOptions{
+			PlanModel: &SelectedModel{Provider: "openai", Model: "gpt-a", Think: true},
+		}
+		resolvePlanModeModels(cfg)
+		require.NotNil(t, cfg.PlanMode.PlanModel)
+		require.Equal(t, int64(4096), cfg.PlanMode.PlanModel.MaxTokens)
+		require.Equal(t, "high", cfg.PlanMode.PlanModel.ReasoningEffort)
+		require.True(t, cfg.PlanMode.PlanModel.Think)
+	})
+
+	t.Run("unknown models are dropped so the regular model applies", func(t *testing.T) {
+		cfg := newCfg()
+		cfg.PlanMode = &PlanModeOptions{
+			PlanModel: &SelectedModel{Provider: "openai", Model: "nope"},
+		}
+		resolvePlanModeModels(cfg)
+		require.Nil(t, cfg.PlanMode.PlanModel)
+	})
+
+	t.Run("incomplete entries are dropped", func(t *testing.T) {
+		cfg := newCfg()
+		cfg.PlanMode = &PlanModeOptions{
+			PlanModel: &SelectedModel{Model: "gpt-a"},
+		}
+		resolvePlanModeModels(cfg)
+		require.Nil(t, cfg.PlanMode.PlanModel)
+	})
+
+	t.Run("nil plan mode is a no-op", func(t *testing.T) {
+		cfg := newCfg()
+		resolvePlanModeModels(cfg)
+		require.Nil(t, cfg.PlanMode)
+	})
+}

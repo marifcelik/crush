@@ -39,6 +39,7 @@ type APIKeyInput struct {
 	provider  catwalk.Provider
 	model     config.SelectedModel
 	modelType config.SelectedModelType
+	slot      config.PlanModeSlot
 
 	width int
 	state APIKeyInputState
@@ -61,6 +62,7 @@ func NewAPIKeyInput(
 	provider catwalk.Provider,
 	model config.SelectedModel,
 	modelType config.SelectedModelType,
+	slot config.PlanModeSlot,
 ) (*APIKeyInput, tea.Cmd) {
 	t := com.Styles
 
@@ -70,6 +72,7 @@ func NewAPIKeyInput(
 	m.provider = provider
 	m.model = model
 	m.modelType = modelType
+	m.slot = slot
 	m.width = 0 // Set dynamically in Draw().
 
 	m.input = textinput.New()
@@ -316,5 +319,6 @@ func (m *APIKeyInput) saveKeyAndContinue() Action {
 		Provider:  m.provider,
 		Model:     m.model,
 		ModelType: m.modelType,
+		Slot:      m.slot,
 	}
 }

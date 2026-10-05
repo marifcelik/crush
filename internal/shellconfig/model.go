@@ -23,18 +23,21 @@ import (
 //	    [--frequency-penalty F] [--presence-penalty F]
 //	    [--provider-options JSON]
 //	model small [<provider>/<id>] [...]
+//	model plan [<provider>/<id>] [...]
 //
 // "add" registers a model on an existing provider (the provider must have
-// been declared with `provider add` first). "remove" removes it. "large" and
-// "small" set the selected model for that slot, or print the current
-// selection as <provider>/<id> when given no argument.
+// been declared with `provider add` first). "remove" removes it. "large"
+// and "small" set the selected model for that slot, or print the current
+// selection as <provider>/<id> when given no argument. "plan" sets the
+// plan_mode.plan_model override used while in plan mode; with no argument
+// it prints the current override (nothing when unset).
 func handleModel(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	b := configBuilderFromCtx(ctx)
 	if b == nil {
 		return nil
 	}
 	if len(args) < 2 {
-		return usage(stderr, "usage: model add|remove <provider>/<id> | model large|small [<provider>/<id>]")
+		return usage(stderr, "usage: model add|remove <provider>/<id> | model large|small|plan [<provider>/<id>]")
 	}
 
 	switch args[1] {
@@ -42,10 +45,10 @@ func handleModel(ctx context.Context, args []string, stdin io.Reader, stdout, st
 		return modelAdd(b, args, stderr)
 	case "remove", "rm":
 		return modelRemove(b, args, stderr)
-	case "large", "small":
+	case "large", "small", "plan":
 		return modelSelect(b, args, stdout, stderr)
 	default:
-		return usage(stderr, fmt.Sprintf("model: unknown subcommand %q (expected add, remove, large, or small)", args[1]))
+		return usage(stderr, fmt.Sprintf("model: unknown subcommand %q (expected add, remove, large, small, plan, or coding)", args[1]))
 	}
 }
 
@@ -157,13 +160,26 @@ var modelSelectFlags = []flagSpec{
 	{name: "--provider-options", child: "provider_options", kind: flagJSONObject, op: opMergeChild},
 }
 
+// modelSlot maps a `model` subcommand to the config section and key it
+// reads/writes. large/small live under "models"; plan is the plan_mode
+// override.
+func modelSlot(slot string) (section, key string) {
+	switch slot {
+	case "plan":
+		return "plan_mode", "plan_model"
+	default:
+		return "models", slot
+	}
+}
+
 func modelSelect(b *ConfigBuilder, args []string, stdout, stderr io.Writer) error {
 	slot := args[1]
+	section, key := modelSlot(slot)
 
 	// No argument: print the current selection as <provider>/<id>.
 	if len(args) == 2 {
-		if models, ok := b.root["models"].(map[string]any); ok {
-			if sel, ok := models[slot].(map[string]any); ok {
+		if models, ok := b.root[section].(map[string]any); ok {
+			if sel, ok := models[key].(map[string]any); ok {
 				provider, _ := sel["provider"].(string)
 				id, _ := sel["model"].(string)
 				if provider != "" && id != "" {
@@ -179,7 +195,7 @@ func modelSelect(b *ConfigBuilder, args []string, stdout, stderr io.Writer) erro
 		return usage(stderr, fmt.Sprintf("model %s: expected <provider>/<id>, got %q", slot, args[2]))
 	}
 
-	sel := childMap(b.section("models"), slot)
+	sel := childMap(b.section(section), key)
 	sel["provider"] = provider
 	sel["model"] = id
 

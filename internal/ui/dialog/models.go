@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -23,7 +24,12 @@ type ModelType int
 const (
 	ModelTypeLarge ModelType = iota
 	ModelTypeSmall
+	ModelTypePlan
 )
+
+// numModelTypes is the number of selectable model types, used by the Tab
+// cycle in the models dialog.
+const numModelTypes = 3
 
 // String returns the string representation of the [ModelType].
 func (mt ModelType) String() string {
@@ -32,18 +38,32 @@ func (mt ModelType) String() string {
 		return "Large Task"
 	case ModelTypeSmall:
 		return "Small Task"
+	case ModelTypePlan:
+		return "Plan Mode"
 	default:
 		return "Unknown"
 	}
 }
 
-// Config returns the corresponding config model type.
+// Config returns the corresponding config model type. The plan_mode
+// slots have no entry in the models map, so they return "".
 func (mt ModelType) Config() config.SelectedModelType {
 	switch mt {
 	case ModelTypeLarge:
 		return config.SelectedModelTypeLarge
 	case ModelTypeSmall:
 		return config.SelectedModelTypeSmall
+	default:
+		return ""
+	}
+}
+
+// Slot returns the plan_mode override the type targets, or the empty slot
+// for the regular large/small types.
+func (mt ModelType) Slot() config.PlanModeSlot {
+	switch mt {
+	case ModelTypePlan:
+		return config.PlanModeSlotPlan
 	default:
 		return ""
 	}
@@ -56,6 +76,8 @@ func (mt ModelType) Placeholder() string {
 		return largeModelInputPlaceholder
 	case ModelTypeSmall:
 		return smallModelInputPlaceholder
+	case ModelTypePlan:
+		return planModelInputPlaceholder
 	default:
 		return ""
 	}
@@ -65,6 +87,7 @@ const (
 	onboardingModelInputPlaceholder = "Find your fave"
 	largeModelInputPlaceholder      = "Choose a model for large, complex tasks"
 	smallModelInputPlaceholder      = "Choose a model for small, simple tasks"
+	planModelInputPlaceholder       = "Choose a model for plan mode (unset uses the large model)"
 )
 
 // ModelsID is the identifier for the model selection dialog.
@@ -100,10 +123,21 @@ var _ Dialog = (*Models)(nil)
 
 // NewModels creates a new Models dialog.
 func NewModels(com *common.Common, isOnboarding bool) (*Models, error) {
+	return newModels(com, isOnboarding, ModelTypeLarge)
+}
+
+// NewModelsForType creates a new Models dialog preset to the given model
+// type, e.g. the plan_mode slots opened from the command palette.
+func NewModelsForType(com *common.Common, isOnboarding bool, modelType ModelType) (*Models, error) {
+	return newModels(com, isOnboarding, modelType)
+}
+
+func newModels(com *common.Common, isOnboarding bool, modelType ModelType) (*Models, error) {
 	t := com.Styles
 	m := &Models{}
 	m.com = com
 	m.isOnboarding = isOnboarding
+	m.modelType = modelType
 
 	help := help.New()
 	help.Styles = t.DialogHelpStyles()
@@ -212,6 +246,7 @@ func (m *Models) HandleMsg(msg tea.Msg) Action {
 				Provider:       modelItem.prov,
 				Model:          modelItem.SelectedModel(),
 				ModelType:      modelItem.SelectedModelType(),
+				Slot:           m.modelType.Slot(),
 				ReAuthenticate: isEdit,
 			}
 		case key.Matches(msg, m.keyMap.ToggleFilter):
@@ -226,11 +261,7 @@ func (m *Models) HandleMsg(msg tea.Msg) Action {
 			if m.isOnboarding {
 				break
 			}
-			if m.modelType == ModelTypeLarge {
-				m.modelType = ModelTypeSmall
-			} else {
-				m.modelType = ModelTypeLarge
-			}
+			m.modelType = ModelType((int(m.modelType) + 1) % numModelTypes)
 			if err := m.setProviderItems(); err != nil {
 				return util.ReportError(err)
 			}
@@ -259,21 +290,15 @@ func (m *Models) Cursor() *tea.Cursor {
 // modelTypeRadioView returns the radio view for model type selection.
 func (m *Models) modelTypeRadioView() string {
 	t := m.com.Styles
-	textStyle := t.Radio.Label
-	largeRadioStyle := t.Radio.Off
-	smallRadioStyle := t.Radio.Off
-	if m.modelType == ModelTypeLarge {
-		largeRadioStyle = t.Radio.On
-	} else {
-		smallRadioStyle = t.Radio.On
+	var parts []string
+	for _, mt := range []ModelType{ModelTypeLarge, ModelTypeSmall, ModelTypePlan} {
+		radioStyle := t.Radio.Off
+		if m.modelType == mt {
+			radioStyle = t.Radio.On
+		}
+		parts = append(parts, radioStyle.Padding(0, 1).Render()+t.Radio.Label.Render(mt.String()))
 	}
-
-	largeRadio := largeRadioStyle.Padding(0, 1).Render()
-	smallRadio := smallRadioStyle.Padding(0, 1).Render()
-
-	return fmt.Sprintf("%s%s  %s%s",
-		largeRadio, textStyle.Render(ModelTypeLarge.String()),
-		smallRadio, textStyle.Render(ModelTypeSmall.String()))
+	return strings.Join(parts, "  ")
 }
 
 // Draw implements [Dialog].
@@ -363,6 +388,19 @@ func (m *Models) isSelectedConfigured() bool {
 	return isConfigured
 }
 
+// currentSelection returns the config's current selection for the dialog's
+// model type. The plan_mode slots read their override (zero value when
+// unset), the regular types read the models map.
+func (m *Models) currentSelection(cfg *config.Config) config.SelectedModel {
+	if m.modelType.Slot() == config.PlanModeSlotPlan {
+		if sel := cfg.PlanModePlanModel(); sel != nil {
+			return *sel
+		}
+		return config.SelectedModel{}
+	}
+	return cfg.Models[m.modelType.Config()]
+}
+
 // setProviderItems sets the provider items in the list.
 func (m *Models) setProviderItems() error {
 	t := m.com.Styles
@@ -370,7 +408,7 @@ func (m *Models) setProviderItems() error {
 
 	var selectedItemID string
 	selectedType := m.modelType.Config()
-	currentModel := cfg.Models[selectedType]
+	currentModel := m.currentSelection(cfg)
 	recentItems := cfg.RecentModels[selectedType]
 
 	// Track providers already added to avoid duplicates

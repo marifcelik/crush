@@ -88,6 +88,20 @@ func (b *Backend) UpdatePreferredModel(workspaceID string, scope config.Scope, m
 	return nil
 }
 
+// SetPlanModeModel sets or clears a plan_mode model override and persists
+// it to the config file at the given scope.
+func (b *Backend) SetPlanModeModel(workspaceID string, scope config.Scope, slot config.PlanModeSlot, model *config.SelectedModel) error {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+	if err := ws.Cfg.SetPlanModeModel(scope, slot, model); err != nil {
+		return err
+	}
+	publishConfigChanged(ws)
+	return nil
+}
+
 // SetCompactMode sets the compact mode setting and persists it.
 func (b *Backend) SetCompactMode(workspaceID string, scope config.Scope, enabled bool) error {
 	ws, err := b.GetWorkspace(workspaceID)

@@ -28,6 +28,14 @@ type ConfigModelRequest struct {
 	Model     config.SelectedModel     `json:"model"`
 }
 
+// ConfigPlanModeModelRequest represents a request to set or clear a
+// plan_mode model override. A nil model clears the override.
+type ConfigPlanModeModelRequest struct {
+	Scope config.Scope          `json:"scope"`
+	Slot  config.PlanModeSlot   `json:"slot"`
+	Model *config.SelectedModel `json:"model"`
+}
+
 // ConfigCompactRequest represents a request to set compact mode.
 type ConfigCompactRequest struct {
 	Scope   config.Scope `json:"scope"`

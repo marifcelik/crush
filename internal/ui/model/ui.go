@@ -2039,7 +2039,7 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 	case dialog.ActionSelectAuthMethod:
 		m.dialog.CloseDialog(dialog.AuthMethodID)
-		if cmd := m.openAuthenticationDialogWithMethod(msg.Provider, msg.Model, msg.ModelType, msg.UseOAuth); cmd != nil {
+		if cmd := m.openAuthenticationDialogWithMethod(msg.Provider, msg.Model, msg.ModelType, msg.Slot, msg.UseOAuth); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	case dialog.ActionCmd:
@@ -2058,6 +2058,29 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		if cmd := m.openDialog(msg.DialogID); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+
+	case dialog.ActionOpenModelsDialog:
+		m.dialog.CloseDialog(dialog.CommandsID)
+		if cmd := m.openModelsDialogForType(msg.ModelType); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case dialog.ActionClearPlanModeModel:
+		if m.isAgentBusy() {
+			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait..."))
+			break
+		}
+		if err := m.com.Workspace.SetPlanModeModel(config.ScopeGlobal, msg.Slot, nil); err != nil {
+			cmds = append(cmds, util.ReportError(err))
+		} else {
+			cmds = append(cmds, m.updateAgentModelCmd(func() tea.Msg {
+				if err := m.com.Workspace.UpdateAgentModel(context.TODO()); err != nil {
+					return util.ReportError(err)
+				}
+				return util.NewInfoMsg(msg.Slot.Label() + " model override cleared")
+			}))
+		}
+		m.dialog.CloseDialog(dialog.CommandsID)
 
 	// Command dialog messages.
 	case dialog.ActionToggleYoloMode:
@@ -2524,23 +2547,30 @@ func (m *UI) handleSelectModel(msg dialog.ActionSelectModel) tea.Cmd {
 				}
 				return nil
 			}
-			return m.openAuthenticationDialog(msg.Provider, msg.Model, msg.ModelType)
+			return m.openAuthenticationDialog(msg.Provider, msg.Model, msg.ModelType, msg.Slot)
 		}
 		if providerCfg.OAuthToken == nil && !providerCfg.HasAPIKey(m.com.Workspace.Resolver()) {
 			m.dialog.CloseDialog(dialog.ModelsID)
-			return m.openAuthenticationDialog(msg.Provider, msg.Model, msg.ModelType)
+			return m.openAuthenticationDialog(msg.Provider, msg.Model, msg.ModelType, msg.Slot)
 		}
 	}
 
 	if !isConfigured() || msg.ReAuthenticate {
 		m.dialog.CloseDialog(dialog.ModelsID)
-		if cmd := m.openAuthenticationDialog(msg.Provider, msg.Model, msg.ModelType); cmd != nil {
+		if cmd := m.openAuthenticationDialog(msg.Provider, msg.Model, msg.ModelType, msg.Slot); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 		return tea.Batch(cmds...)
 	}
 
-	if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, msg.ModelType, msg.Model); err != nil {
+	if msg.Slot != "" {
+		// A plan_mode override: persist it and rebuild the agent models.
+		// Theme swapping and the small-model defaulting only apply to the
+		// regular large/small slots.
+		if err := m.com.Workspace.SetPlanModeModel(config.ScopeGlobal, msg.Slot, &msg.Model); err != nil {
+			cmds = append(cmds, util.ReportError(err))
+		}
+	} else if err := m.com.Workspace.UpdatePreferredModel(config.ScopeGlobal, msg.ModelType, msg.Model); err != nil {
 		cmds = append(cmds, util.ReportError(err))
 	} else {
 		if msg.ModelType == config.SelectedModelTypeLarge {
@@ -2568,6 +2598,9 @@ func (m *UI) handleSelectModel(msg dialog.ActionSelectModel) tea.Cmd {
 			modelType = stringext.Capitalize(string(msg.ModelType))
 			modelName = msg.Model.Model
 		)
+		if msg.Slot != "" {
+			modelType = msg.Slot.Label()
+		}
 		if catwalkModel := cfg.GetModel(msg.Model.Provider, msg.Model.Model); catwalkModel != nil && catwalkModel.Name != "" {
 			modelName = catwalkModel.Name
 		}
@@ -2600,7 +2633,7 @@ func (m *UI) handleSelectModel(msg dialog.ActionSelectModel) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.SelectedModel, modelType config.SelectedModelType) tea.Cmd {
+func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.SelectedModel, modelType config.SelectedModelType, slot config.PlanModeSlot) tea.Cmd {
 	var (
 		dlg dialog.Dialog
 		cmd tea.Cmd
@@ -2610,9 +2643,9 @@ func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.Se
 
 	switch provider.ID {
 	case "hyper":
-		dlg, cmd = dialog.NewOAuthHyper(m.com, isOnboarding, provider, model, modelType)
+		dlg, cmd = dialog.NewOAuthHyper(m.com, isOnboarding, provider, model, modelType, slot)
 	case catwalk.InferenceProviderCopilot:
-		dlg, cmd = dialog.NewOAuthCopilot(m.com, isOnboarding, provider, model, modelType)
+		dlg, cmd = dialog.NewOAuthCopilot(m.com, isOnboarding, provider, model, modelType, slot)
 	case catwalk.InferenceProviderOpenAI:
 		providerCfg, _ := m.com.Config().Providers.Get(string(provider.ID))
 		hasAPIKey := providerCfg.HasAPIKey(m.com.Workspace.Resolver())
@@ -2620,16 +2653,16 @@ func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.Se
 		case model.Model == "" || providerCfg.OAuthToken != nil:
 			// The sign-in placeholder, or a re-authentication while the
 			// ChatGPT login is the credential in force.
-			dlg, cmd = dialog.NewOAuthOpenAI(m.com, isOnboarding, provider, model, modelType)
+			dlg, cmd = dialog.NewOAuthOpenAI(m.com, isOnboarding, provider, model, modelType, slot)
 		case !hasAPIKey:
 			// No credential at all: let the user pick the method.
-			dlg = dialog.NewAuthMethod(m.com, isOnboarding, provider, model, modelType)
+			dlg = dialog.NewAuthMethod(m.com, isOnboarding, provider, model, modelType, slot)
 		default:
 			// An API key is the credential in force: edit it.
-			dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType)
+			dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType, slot)
 		}
 	default:
-		dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType)
+		dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType, slot)
 	}
 
 	if m.dialog.ContainsDialog(dlg.ID()) {
@@ -2646,7 +2679,7 @@ func (m *UI) openAuthenticationDialog(provider catwalk.Provider, model config.Se
 // clears the model: the ChatGPT catalog is only known after sign-in, so
 // the flow ends by reopening the models list rather than selecting the
 // API-key model the user happened to start from.
-func (m *UI) openAuthenticationDialogWithMethod(provider catwalk.Provider, model config.SelectedModel, modelType config.SelectedModelType, useOAuth bool) tea.Cmd {
+func (m *UI) openAuthenticationDialogWithMethod(provider catwalk.Provider, model config.SelectedModel, modelType config.SelectedModelType, slot config.PlanModeSlot, useOAuth bool) tea.Cmd {
 	isOnboarding := m.state == uiOnboarding
 
 	var (
@@ -2655,9 +2688,9 @@ func (m *UI) openAuthenticationDialogWithMethod(provider catwalk.Provider, model
 	)
 	if useOAuth {
 		model.Model = ""
-		dlg, cmd = dialog.NewOAuthOpenAI(m.com, isOnboarding, provider, model, modelType)
+		dlg, cmd = dialog.NewOAuthOpenAI(m.com, isOnboarding, provider, model, modelType, slot)
 	} else {
-		dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType)
+		dlg, cmd = dialog.NewAPIKeyInput(m.com, isOnboarding, provider, model, modelType, slot)
 	}
 
 	if m.dialog.ContainsDialog(dlg.ID()) {
@@ -4344,10 +4377,21 @@ func (m *UI) setInputMode(target uiInputMode) tea.Cmd {
 		if err == nil {
 			err = m.com.Workspace.UpdateAgentModel(context.Background())
 		}
+		// Report the model the switched-to agent actually runs on: with
+		// plan_mode.plan_model / plan_mode.coding_model overrides the model
+		// changes with the mode, so the banner tells the user what to expect.
+		var model string
+		if err == nil {
+			am := m.com.Workspace.AgentModel()
+			if am.ModelCfg.Provider != "" && am.ModelCfg.Model != "" {
+				model = am.ModelCfg.Provider + "/" + am.ModelCfg.Model
+			}
+		}
 		return modeSwitchedMsg{
-			mode: target,
-			yolo: yolo,
-			err:  err,
+			mode:  target,
+			yolo:  yolo,
+			err:   err,
+			model: model,
 		}
 	}
 }
@@ -4361,17 +4405,27 @@ func (m *UI) applyModeSwitch(msg modeSwitchedMsg) []tea.Cmd {
 	}
 	m.mode = msg.mode
 	m.setEditorPrompt(m.yoloModeCached())
+	// The active agent (and with plan_mode overrides its model) changed:
+	// drop the memoized ready/model state and re-probe it.
+	m.invalidateBusyCaches()
 	var cmds []tea.Cmd
+	if cmd := m.dispatchBusyRefresh(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 	if msg.continueSessionID != "" && m.session != nil && m.session.ID == msg.continueSessionID {
 		cmds = append(cmds, m.sendMessageInternal("Implement the plan.", true))
 	}
+	modelSuffix := ""
+	if msg.model != "" {
+		modelSuffix = " Model: " + msg.model + "."
+	}
 	switch {
 	case msg.mode == uiInputModePlan:
-		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypePlan, Msg: planModeBannerMsg}))
+		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypePlan, Msg: planModeBannerMsg + modelSuffix}))
 	case msg.yolo:
-		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypeYolo, Msg: yoloModeBannerMsg}))
+		cmds = append(cmds, util.CmdHandler(util.InfoMsg{Type: util.InfoTypeYolo, Msg: yoloModeBannerMsg + modelSuffix}))
 	default:
-		cmds = append(cmds, util.ReportInfo("input mode: code"))
+		cmds = append(cmds, util.ReportInfo("input mode: code"+modelSuffix))
 	}
 	return cmds
 }
@@ -4382,7 +4436,10 @@ type modeSwitchedMsg struct {
 	continueSessionID string
 	mode              uiInputMode
 	yolo              bool
-	err               error
+	// model is the <provider>/<id> the switched-to agent runs on, captured
+	// after the switch settled. Empty when unavailable.
+	model string
+	err   error
 }
 
 // closeCompletions closes the completions popup and resets state.
@@ -4982,6 +5039,24 @@ func (m *UI) openModelsDialog() tea.Cmd {
 	return nil
 }
 
+// openModelsDialogForType opens the models dialog preset to the given model
+// type, used by the command palette to target a plan_mode slot.
+func (m *UI) openModelsDialogForType(modelType dialog.ModelType) tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.ModelsID) {
+		m.dialog.BringToFront(dialog.ModelsID)
+		return nil
+	}
+
+	isOnboarding := m.state == uiOnboarding
+	modelsDialog, err := dialog.NewModelsForType(m.com, isOnboarding, modelType)
+	if err != nil {
+		return util.ReportError(err)
+	}
+
+	m.dialog.OpenDialog(modelsDialog)
+	return nil
+}
+
 // openCommandsDialog opens the commands dialog.
 func (m *UI) openCommandsDialog() tea.Cmd {
 	if m.dialog.ContainsDialog(dialog.CommandsID) {
@@ -5336,7 +5411,7 @@ func (m *UI) handleReAuthenticate(providerID string) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return m.openAuthenticationDialog(providerCfg.ToProvider(), cfg.Models[agentCfg.Model], agentCfg.Model)
+	return m.openAuthenticationDialog(providerCfg.ToProvider(), cfg.Models[agentCfg.Model], agentCfg.Model, "")
 }
 
 // handleAWSSSOAuth opens the AWS SSO progress dialog (or updates the SSO URL

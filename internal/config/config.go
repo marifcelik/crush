@@ -750,6 +750,61 @@ func (h *HookConfig) TimeoutDuration() time.Duration {
 }
 
 // Config holds the configuration for crush.
+// PlanModeSlot identifies which plan_mode model override a selection
+// targets. The empty value means "no override", i.e. the regular large
+// model.
+type PlanModeSlot string
+
+const (
+	// PlanModeSlotPlan targets plan_mode.plan_model, used while in plan
+	// mode.
+	PlanModeSlotPlan PlanModeSlot = "plan"
+)
+
+// Field returns the config key of the slot inside the plan_mode section.
+func (p PlanModeSlot) Field() string {
+	switch p {
+	case PlanModeSlotPlan:
+		return "plan_model"
+	default:
+		return ""
+	}
+}
+
+// Label returns a human-readable name for the slot.
+func (p PlanModeSlot) Label() string {
+	switch p {
+	case PlanModeSlotPlan:
+		return "Plan mode"
+	default:
+		return ""
+	}
+}
+
+// Valid reports whether p is a known slot.
+func (p PlanModeSlot) Valid() bool {
+	return p == PlanModeSlotPlan
+}
+
+// PlanModeOptions overrides the models used around plan mode. When a
+// model is unset (or invalid), the regular `models` selection applies
+// instead.
+type PlanModeOptions struct {
+	// Model used by the plan agent while in plan mode. Unset falls back to
+	// the regular large model.
+	PlanModel *SelectedModel `json:"plan_model,omitempty" jsonschema:"description=Model used while in plan mode. Unset uses the regular large model"`
+}
+
+// PlanModePlanModel returns the plan-mode model override, or nil when
+// plan_mode.plan_model is unset (or was dropped as invalid at load time),
+// in which case the regular large model applies.
+func (c *Config) PlanModePlanModel() *SelectedModel {
+	if c.PlanMode == nil {
+		return nil
+	}
+	return c.PlanMode.PlanModel
+}
+
 type Config struct {
 	Schema string `json:"$schema,omitempty"`
 
@@ -758,6 +813,9 @@ type Config struct {
 
 	// Recently used models stored in the data directory config.
 	RecentModels map[SelectedModelType][]SelectedModel `json:"recent_models,omitempty" jsonschema:"-"`
+
+	// Plan-mode model overrides (plan_model / coding_model).
+	PlanMode *PlanModeOptions `json:"plan_mode,omitempty" jsonschema:"description=Model overrides used around plan mode"`
 
 	// The providers that are configured
 	Providers *csync.Map[string, ProviderConfig] `json:"providers,omitempty" jsonschema:"description=AI provider configurations"`
@@ -796,6 +854,10 @@ func (c *Config) cloneForWrite() *Config {
 	nc.Models = maps.Clone(c.Models)
 	nc.RecentModels = maps.Clone(c.RecentModels)
 	nc.MCP = maps.Clone(c.MCP)
+	if c.PlanMode != nil {
+		planMode := *c.PlanMode
+		nc.PlanMode = &planMode
+	}
 	if c.Options != nil {
 		opts := *c.Options
 		if c.Options.TUI != nil {

@@ -192,3 +192,26 @@ provider rm anthropic`)
 	require.Len(t, models, 1)
 	require.Equal(t, "b", models[0].(map[string]any)["id"])
 }
+
+func TestModelPlan(t *testing.T) {
+	t.Parallel()
+
+	result := loadScript(t, `model plan anthropic/claude-4.5 --think`)
+
+	planMode := result["plan_mode"].(map[string]any)
+	plan := planMode["plan_model"].(map[string]any)
+	require.Equal(t, "anthropic", plan["provider"])
+	require.Equal(t, "claude-4.5", plan["model"])
+	require.Equal(t, true, plan["think"])
+}
+
+// TestModelPlanPrint verifies that `model plan` with no argument prints the
+// current override, capturable via command substitution.
+func TestModelPlanPrint(t *testing.T) {
+	t.Parallel()
+
+	result := loadScript(t, `model plan anthropic/claude-4.5
+option data-directory "$(model plan)"`)
+
+	require.Equal(t, "anthropic/claude-4.5", result["options"].(map[string]any)["data_directory"])
+}

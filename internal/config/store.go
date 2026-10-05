@@ -542,6 +542,28 @@ func (s *ConfigStore) UpdatePreferredModel(scope Scope, modelType SelectedModelT
 	})
 }
 
+// SetPlanModeModel sets a plan_mode model override and persists it to the
+// config file at the given scope. A nil model clears the override so the
+// regular large model applies. As with UpdatePreferredModel, the write skips
+// the full disk reparse/reload; agents are refreshed separately by the
+// caller (see UpdateAgentModel).
+func (s *ConfigStore) SetPlanModeModel(scope Scope, slot PlanModeSlot, model *SelectedModel) error {
+	if !slot.Valid() {
+		return fmt.Errorf("invalid plan mode slot %q", slot)
+	}
+	field := "plan_mode." + slot.Field()
+	return s.update(scope, func(c *Config) map[string]any {
+		if c.PlanMode == nil {
+			if model == nil {
+				return nil
+			}
+			c.PlanMode = &PlanModeOptions{}
+		}
+		c.PlanMode.PlanModel = model
+		return map[string]any{field: model}
+	})
+}
+
 // updatePreferredModelFields builds the fields map for persisting a preferred
 // model change. Shared between UpdatePreferredModel and direct updateLocked
 // callers (e.g. Load). Caller must hold writeMu.
@@ -1396,6 +1418,7 @@ func (s *ConfigStore) reloadFromDiskLocked(ctx context.Context) error {
 		} else {
 			cfg.Models[SelectedModelTypeLarge] = resolved.Large
 			cfg.Models[SelectedModelTypeSmall] = resolved.Small
+			resolvePlanModeModels(cfg)
 			s.SetupAgents()
 		}
 	}
