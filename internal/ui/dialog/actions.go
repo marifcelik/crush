@@ -177,19 +177,6 @@ type (
 		Slot      config.PlanModeSlot
 		UseOAuth  bool
 	}
-
-	// ActionOpenModelsDialog opens the models dialog preset to a model
-	// type (e.g. the plan_mode slots). The zero value opens the regular
-	// large slot.
-	ActionOpenModelsDialog struct {
-		ModelType ModelType
-	}
-
-	// ActionClearPlanModeModel clears a plan_mode model override so the
-	// regular large model applies again.
-	ActionClearPlanModeModel struct {
-		Slot config.PlanModeSlot
-	}
 )
 
 // ActionCmd represents an action that carries a [tea.Cmd] to be passed to the

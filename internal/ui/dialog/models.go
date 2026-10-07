@@ -126,12 +126,6 @@ func NewModels(com *common.Common, isOnboarding bool) (*Models, error) {
 	return newModels(com, isOnboarding, ModelTypeLarge)
 }
 
-// NewModelsForType creates a new Models dialog preset to the given model
-// type, e.g. the plan_mode slots opened from the command palette.
-func NewModelsForType(com *common.Common, isOnboarding bool, modelType ModelType) (*Models, error) {
-	return newModels(com, isOnboarding, modelType)
-}
-
 func newModels(com *common.Common, isOnboarding bool, modelType ModelType) (*Models, error) {
 	t := com.Styles
 	m := &Models{}

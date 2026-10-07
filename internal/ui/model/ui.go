@@ -2059,29 +2059,6 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 
-	case dialog.ActionOpenModelsDialog:
-		m.dialog.CloseDialog(dialog.CommandsID)
-		if cmd := m.openModelsDialogForType(msg.ModelType); cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-	case dialog.ActionClearPlanModeModel:
-		if m.isAgentBusy() {
-			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait..."))
-			break
-		}
-		if err := m.com.Workspace.SetPlanModeModel(config.ScopeGlobal, msg.Slot, nil); err != nil {
-			cmds = append(cmds, util.ReportError(err))
-		} else {
-			cmds = append(cmds, m.updateAgentModelCmd(func() tea.Msg {
-				if err := m.com.Workspace.UpdateAgentModel(context.TODO()); err != nil {
-					return util.ReportError(err)
-				}
-				return util.NewInfoMsg(msg.Slot.Label() + " model override cleared")
-			}))
-		}
-		m.dialog.CloseDialog(dialog.CommandsID)
-
 	// Command dialog messages.
 	case dialog.ActionToggleYoloMode:
 		if m.mode == uiInputModePlan {
@@ -5036,24 +5013,6 @@ func (m *UI) openModelsDialog() tea.Cmd {
 
 	m.dialog.OpenDialog(modelsDialog)
 
-	return nil
-}
-
-// openModelsDialogForType opens the models dialog preset to the given model
-// type, used by the command palette to target a plan_mode slot.
-func (m *UI) openModelsDialogForType(modelType dialog.ModelType) tea.Cmd {
-	if m.dialog.ContainsDialog(dialog.ModelsID) {
-		m.dialog.BringToFront(dialog.ModelsID)
-		return nil
-	}
-
-	isOnboarding := m.state == uiOnboarding
-	modelsDialog, err := dialog.NewModelsForType(m.com, isOnboarding, modelType)
-	if err != nil {
-		return util.ReportError(err)
-	}
-
-	m.dialog.OpenDialog(modelsDialog)
 	return nil
 }
 
