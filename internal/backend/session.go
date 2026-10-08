@@ -57,10 +57,8 @@ func (b *Backend) GetAgentSession(ctx context.Context, workspaceID, sessionID st
 	}
 
 	return proto.AgentSession{
-		Session: proto.Session{
-			ID:    se.ID,
-			Title: se.Title,
-		},
+		ID:     se.ID,
+		Title:  se.Title,
 		IsBusy: isSessionBusy,
 	}, nil
 }
@@ -132,21 +130,24 @@ func (b *Backend) ListAllUserMessages(ctx context.Context, workspaceID string) (
 }
 
 // DeleteMessagesAfter deletes messages from the given message ID onward in a session.
-func (b *Backend) DeleteMessagesAfter(ctx context.Context, workspaceID, sessionID, messageID string) error {
+// When revertFileChanges is true, the workspace also rolls back the file
+// modifications made by the deleted turn, on disk and in the file history.
+func (b *Backend) DeleteMessagesAfter(ctx context.Context, workspaceID, sessionID, messageID string, revertFileChanges bool) error {
 	ws, err := b.GetWorkspace(workspaceID)
 	if err != nil {
 		return err
 	}
 
-	return ws.Messages.DeleteMessagesAfter(ctx, sessionID, messageID)
+	return ws.DeleteMessagesAfter(ctx, sessionID, messageID, revertFileChanges)
 }
 
-// RestoreMessages re-inserts previously deleted messages into a session.
+// RestoreMessages re-inserts previously deleted messages into a session,
+// re-applying the file modifications they made on disk and to the file history.
 func (b *Backend) RestoreMessages(ctx context.Context, workspaceID string, messages []message.Message) error {
 	ws, err := b.GetWorkspace(workspaceID)
 	if err != nil {
 		return err
 	}
 
-	return ws.Messages.RestoreMessages(ctx, messages)
+	return ws.RestoreMessages(ctx, messages)
 }

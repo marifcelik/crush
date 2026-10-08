@@ -223,8 +223,8 @@ func (w *ClientWorkspace) ListAllUserMessages(ctx context.Context) ([]message.Me
 	return protoToMessages(msgs), nil
 }
 
-func (w *ClientWorkspace) DeleteMessagesAfter(ctx context.Context, sessionID, messageID string) error {
-	return w.client.DeleteMessagesAfter(ctx, w.workspaceID(), sessionID, messageID)
+func (w *ClientWorkspace) DeleteMessagesAfter(ctx context.Context, sessionID, messageID string, revertFileChanges bool) error {
+	return w.client.DeleteMessagesAfter(ctx, w.workspaceID(), sessionID, messageID, revertFileChanges)
 }
 
 func (w *ClientWorkspace) RestoreMessages(ctx context.Context, messages []message.Message) error {

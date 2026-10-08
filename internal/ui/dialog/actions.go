@@ -144,6 +144,12 @@ type (
 
 	// ActionUndo is a message to undo the last user message and all subsequent messages.
 	ActionUndo struct{}
+	// ActionUndoChoice is a message carrying the scope chosen in the undo
+	// confirmation dialog. RevertFiles controls whether file changes made
+	// during the undone turn are rolled back as well.
+	ActionUndoChoice struct {
+		RevertFiles bool
+	}
 	// ActionRedo is a message to redo the last undone message batch.
 	ActionRedo struct{}
 )

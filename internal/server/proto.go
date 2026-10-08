@@ -410,16 +410,18 @@ func (c *controllerV1) handleGetWorkspaceAllUserMessages(w http.ResponseWriter, 
 //	@Tags			sessions
 //	@Param			id		path	string	true	"Workspace ID"
 //	@Param			sid		path	string	true	"Session ID"
-//	@Param			mid		path	string	true	"Message ID"
-//	@Success		200
-//	@Failure		404	{object}	proto.Error
-//	@Failure		500	{object}	proto.Error
-//	@Router			/workspaces/{id}/sessions/{sid}/messages/{mid} [delete]
+//	@Param		mid		path	string	true	"Message ID"
+//	@Param		revert_files	query	bool	false	"Also revert file changes made by the deleted turn"
+//	@Success	200
+//	@Failure	404	{object}	proto.Error
+//	@Failure	500	{object}	proto.Error
+//	@Router		/workspaces/{id}/sessions/{sid}/messages/{mid} [delete]
 func (c *controllerV1) handleDeleteWorkspaceSessionMessagesAfter(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sid := r.PathValue("sid")
 	mid := r.PathValue("mid")
-	if err := c.backend.DeleteMessagesAfter(r.Context(), id, sid, mid); err != nil {
+	revertFileChanges := r.URL.Query().Get("revert_files") == "true"
+	if err := c.backend.DeleteMessagesAfter(r.Context(), id, sid, mid, revertFileChanges); err != nil {
 		c.handleError(w, r, err)
 		return
 	}

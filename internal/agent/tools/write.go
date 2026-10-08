@@ -39,6 +39,15 @@ type WriteResponseMetadata struct {
 	Diff      string `json:"diff"`
 	Additions int    `json:"additions"`
 	Removals  int    `json:"removals"`
+	// OldContent holds the file's content before the write. Empty when the
+	// file did not exist prior to the write.
+	OldContent string `json:"old_content,omitempty"`
+	// NewContent holds the content the write stored on disk.
+	NewContent string `json:"new_content,omitempty"`
+	// FileExisted reports whether the file existed before the write. Used
+	// to distinguish undo of a newly created file (delete it) from undo
+	// of an overwrite of an empty file.
+	FileExisted bool `json:"file_existed"`
 }
 
 const WriteToolName = "write"
@@ -92,7 +101,9 @@ func NewWriteTool(
 			}
 
 			oldContent := ""
+			fileExisted := false
 			if fileInfo != nil && !fileInfo.IsDir() {
+				fileExisted = true
 				oldBytes, readErr := os.ReadFile(filePath)
 				if readErr == nil {
 					oldContent = string(oldBytes)
@@ -171,9 +182,12 @@ func NewWriteTool(
 			return fantasy.WithResponseMetadata(
 				fantasy.NewTextResponse(result),
 				WriteResponseMetadata{
-					Diff:      diff,
-					Additions: additions,
-					Removals:  removals,
+					Diff:        diff,
+					Additions:   additions,
+					Removals:    removals,
+					OldContent:  oldContent,
+					NewContent:  params.Content,
+					FileExisted: fileExisted,
 				},
 			), nil
 		},

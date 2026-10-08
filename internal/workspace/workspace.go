@@ -134,7 +134,11 @@ type Workspace interface {
 	ListMessages(ctx context.Context, sessionID string) ([]message.Message, error)
 	ListUserMessages(ctx context.Context, sessionID string) ([]message.Message, error)
 	ListAllUserMessages(ctx context.Context) ([]message.Message, error)
-	DeleteMessagesAfter(ctx context.Context, sessionID, messageID string) error
+	// DeleteMessagesAfter deletes messages from the given message ID
+	// onward. When revertFileChanges is true, file modifications made by
+	// the deleted turn are rolled back on disk and in the file history
+	// that feeds the session's modified-files view.
+	DeleteMessagesAfter(ctx context.Context, sessionID, messageID string, revertFileChanges bool) error
 	RestoreMessages(ctx context.Context, messages []message.Message) error
 
 	// Agent

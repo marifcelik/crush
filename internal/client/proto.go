@@ -865,8 +865,14 @@ func (c *Client) ListAllUserMessages(ctx context.Context, id string) ([]proto.Me
 }
 
 // DeleteMessagesAfter deletes messages in a session from the given message ID onward.
-func (c *Client) DeleteMessagesAfter(ctx context.Context, id string, sessionID string, messageID string) error {
-	rsp, err := c.delete(ctx, fmt.Sprintf("/workspaces/%s/sessions/%s/messages/%s", id, sessionID, messageID), nil, nil)
+// When revertFileChanges is true the server also rolls back the file
+// modifications made by the deleted turn.
+func (c *Client) DeleteMessagesAfter(ctx context.Context, id string, sessionID string, messageID string, revertFileChanges bool) error {
+	query := url.Values{}
+	if revertFileChanges {
+		query.Set("revert_files", "true")
+	}
+	rsp, err := c.delete(ctx, fmt.Sprintf("/workspaces/%s/sessions/%s/messages/%s", id, sessionID, messageID), query, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete messages after: %w", err)
 	}

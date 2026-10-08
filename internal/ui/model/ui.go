@@ -966,6 +966,7 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.setSessionMessages(msg.remaining); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+		cmds = append(cmds, m.reloadSessionFiles())
 
 	case sendMessageMsg:
 		cmds = append(cmds, m.sendMessage(msg.Content, msg.Attachments...))
@@ -1719,19 +1720,28 @@ func (m *UI) handleConnectionEvent(msg workspace.ConnectionEvent) []tea.Cmd {
 	return cmds
 }
 
-// reloadSessionMessages reloads the messages for the current session.
-func (m *UI) reloadSessionMessages() tea.Cmd {
+// reloadSessionMessages reloads the messages for the given session.
+func (m *UI) reloadSessionMessages(ctx context.Context, sessionID string) tea.Cmd {
 	return func() tea.Msg {
-		if !m.hasSession() {
-			return nil
-		}
-
-		msgs, err := m.com.Workspace.ListMessages(context.Background(), m.session.ID)
+		msgs, err := m.com.Workspace.ListMessages(ctx, sessionID)
 		if err != nil {
 			return util.ReportError(err)
 		}
-
 		return reloadSessionMessagesMsg{messages: msgs}
+	}
+}
+
+// reloadSessionFiles reloads the modified-files section of the sidebar.
+func (m *UI) reloadSessionFiles() tea.Cmd {
+	if !m.hasSession() {
+		return nil
+	}
+	return func() tea.Msg {
+		sessionFiles, err := m.loadSessionFiles(m.session.ID)
+		if err != nil {
+			return util.NewErrorMsg(err)
+		}
+		return sessionFilesUpdatesMsg{sessionFiles: sessionFiles}
 	}
 }
 
@@ -2190,8 +2200,11 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before undoing..."))
 			break
 		}
-		cmds = append(cmds, m.handleUndoCommand())
+		m.openUndoDialog()
 		m.dialog.CloseDialog(dialog.CommandsID)
+	case dialog.ActionUndoChoice:
+		m.dialog.CloseDialog(dialog.UndoID)
+		cmds = append(cmds, m.handleUndoCommand(msg.RevertFiles))
 	case dialog.ActionRedo:
 		if m.isAgentBusy() {
 			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before redoing..."))
@@ -5121,16 +5134,17 @@ func (m *UI) handleRedoCommand() tea.Cmd {
 		if err := m.com.Workspace.RestoreMessages(ctx, toRestore); err != nil {
 			return util.ReportError(fmt.Errorf("Failed to redo: %w", err))
 		}
-		msgs, err := m.com.Workspace.ListMessages(ctx, sessionID)
-		if err != nil {
-			return util.ReportError(fmt.Errorf("Failed to reload messages: %w", err))
-		}
-		return reloadSessionMessagesMsg{messages: msgs}
+		return tea.Batch(
+			m.reloadSessionMessages(ctx, sessionID),
+			m.reloadSessionFiles(),
+		)
 	}
 }
 
-// handleUndoCommand deletes the last user message and all messages after it.
-func (m *UI) handleUndoCommand() tea.Cmd {
+// handleUndoCommand deletes the last user message and all messages after
+// it. When revertFiles is true, file changes made during the undone turn
+// are rolled back as well.
+func (m *UI) handleUndoCommand(revertFiles bool) tea.Cmd {
 	return func() tea.Msg {
 		if !m.hasSession() {
 			return util.ReportWarn("No active session to undo")
@@ -5171,8 +5185,11 @@ func (m *UI) handleUndoCommand() tea.Cmd {
 		deleted := make([]message.Message, len(allMsgs[splitIdx:]))
 		copy(deleted, allMsgs[splitIdx:])
 
-		// Delete the last user message and all messages after it.
-		err = m.com.Workspace.DeleteMessagesAfter(ctx, sessionID, lastUserMessage.ID)
+		// Delete the last user message and all messages after it. When
+		// reverting files, the backend rolls back the working tree and the
+		// file history before deleting so a failure leaves the transcript
+		// intact and the undo can be retried.
+		err = m.com.Workspace.DeleteMessagesAfter(ctx, sessionID, lastUserMessage.ID, revertFiles)
 		if err != nil {
 			return util.ReportError(fmt.Errorf("Failed to undo: %w", err))
 		}
@@ -5457,6 +5474,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.UndoID:
+		if cmd := m.openUndoDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	default:
 		// Unknown dialog
 		break
@@ -5464,6 +5485,7 @@ func (m *UI) openDialog(id string) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// openQuitDialog opens the quit confirmation dialog.
 // openQuitDialog opens the quit confirmation dialog.
 func (m *UI) openQuitDialog() tea.Cmd {
 	if m.dialog.ContainsDialog(dialog.QuitID) {
@@ -5474,6 +5496,17 @@ func (m *UI) openQuitDialog() tea.Cmd {
 
 	quitDialog := dialog.NewQuit(m.com)
 	m.dialog.OpenDialog(quitDialog)
+	return nil
+}
+
+// openUndoDialog opens the undo scope confirmation dialog.
+func (m *UI) openUndoDialog() tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.UndoID) {
+		m.dialog.BringToFront(dialog.UndoID)
+		return nil
+	}
+
+	m.dialog.OpenDialog(dialog.NewUndo(m.com))
 	return nil
 }
 

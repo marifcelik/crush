@@ -24,6 +24,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/event"
+	"github.com/charmbracelet/crush/internal/filechange"
 	"github.com/charmbracelet/crush/internal/filetracker"
 	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/herdr"
@@ -888,4 +889,71 @@ func (app *App) checkForUpdates(ctx context.Context) {
 		LatestVersion:  info.Latest,
 		IsDevelopment:  info.IsDevelopment(),
 	})
+}
+
+// DeleteMessagesAfter deletes messages from the given message ID onward
+// in a session. When revertFileChanges is true, the file modifications
+// made by the deleted turn are rolled back on disk and a version with
+// the restored content is appended to the file history so the
+// modified-files view reflects the undo.
+func (app *App) DeleteMessagesAfter(ctx context.Context, sessionID, messageID string, revertFileChanges bool) error {
+	anchor, err := app.Messages.Get(ctx, messageID)
+	if err != nil {
+		return err
+	}
+	msgs, err := app.Messages.List(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+
+	// Mirror the SQL >= comparison used by the message deletion so the
+	// file changes extracted here cover exactly the deleted turn.
+	splitIdx := len(msgs)
+	for i, msg := range msgs {
+		if msg.CreatedAt >= anchor.CreatedAt {
+			splitIdx = i
+			break
+		}
+	}
+	changes := filechange.FromMessages(msgs[splitIdx:])
+
+	if revertFileChanges {
+		if err := filechange.Revert(changes); err != nil {
+			return err
+		}
+	}
+	if err := app.Messages.DeleteMessagesAfter(ctx, sessionID, messageID); err != nil {
+		return err
+	}
+	if revertFileChanges {
+		for _, c := range changes {
+			if _, err := app.History.CreateVersion(ctx, sessionID, c.Path, c.OldContent); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// RestoreMessages re-inserts previously deleted messages, re-applies the
+// file modifications they made on disk, and appends matching file history
+// versions so the modified-files view reflects the redo.
+func (app *App) RestoreMessages(ctx context.Context, messages []message.Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	changes := filechange.FromMessages(messages)
+	if err := filechange.Apply(changes); err != nil {
+		return err
+	}
+	if err := app.Messages.RestoreMessages(ctx, messages); err != nil {
+		return err
+	}
+	for _, c := range changes {
+		if _, err := app.History.CreateVersion(ctx, messages[0].SessionID, c.Path, c.NewContent); err != nil {
+			return err
+		}
+	}
+	return nil
 }
