@@ -188,7 +188,7 @@ func (e *questionEditor) drawNote(lines *[]contentLine, innerWidth int, bar, bar
 
 	if saved, ok := e.notes[noteKey]; ok && saved != "" {
 		dimmed := noteStyle.Render(saved)
-		for _, ln := range strings.Split(dimmed, "\n") {
+		for ln := range strings.SplitSeq(dimmed, "\n") {
 			*lines = append(*lines, contentLine{text: bar + notePrefix + ln, cursorItem: isActive, choiceIdx: -1})
 		}
 	}

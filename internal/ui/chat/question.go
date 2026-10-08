@@ -146,10 +146,10 @@ func parseQuestionBlocks(content string) []questionBlock {
 		if notesIdx := strings.Index(raw, "\n\nNotes:"); notesIdx >= 0 {
 			b.answer = strings.TrimSpace(raw[:notesIdx])
 			notesRaw := raw[notesIdx+len("\n\nNotes:"):]
-			for _, noteLine := range strings.Split(notesRaw, "\n") {
+			for noteLine := range strings.SplitSeq(notesRaw, "\n") {
 				noteLine = strings.TrimSpace(noteLine)
-				if strings.HasPrefix(noteLine, "- ") {
-					b.notes = append(b.notes, strings.TrimPrefix(noteLine, "- "))
+				if after, ok := strings.CutPrefix(noteLine, "- "); ok {
+					b.notes = append(b.notes, after)
 				}
 			}
 		} else {

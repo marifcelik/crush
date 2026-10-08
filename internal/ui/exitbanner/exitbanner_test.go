@@ -105,7 +105,7 @@ func TestRenderTruncatesLongTitles(t *testing.T) {
 	sess.Title = strings.Repeat("long ", 60)
 
 	got := Render(config.ExitBannerCompact, sess, 40)
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), 40, "line wider than the terminal: %q", line)
 	}
 	require.Contains(t, got, "…")
@@ -128,7 +128,7 @@ func TestRenderFitsTheGivenWidth(t *testing.T) {
 	for _, width := range []int{40, 80, 200} {
 		for _, banner := range []config.ExitBanner{config.ExitBannerCompact, config.ExitBannerDefault} {
 			got := Render(banner, testSession(), width)
-			for _, line := range strings.Split(got, "\n") {
+			for line := range strings.SplitSeq(got, "\n") {
 				require.LessOrEqual(t, ansi.StringWidth(line), width,
 					"%s banner overflows width %d: %q", banner, width, line)
 			}
@@ -143,7 +143,7 @@ func TestRenderNonPositiveWidthUsesFallback(t *testing.T) {
 	sess.Title = strings.Repeat("long ", 60)
 
 	got := Render(config.ExitBannerCompact, sess, 0)
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(line), FallbackWidth)
 	}
 }

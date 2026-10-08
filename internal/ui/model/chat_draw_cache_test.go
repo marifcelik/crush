@@ -241,11 +241,9 @@ func TestChatDrawCache_FallbackOnNonAnsiMethod(t *testing.T) {
 
 	w, h := 40, 10
 	scr := fixedMethodScreen{
-		ScreenBuffer: uv.ScreenBuffer{
-			RenderBuffer: uv.NewRenderBuffer(w, h),
-			Method:       ansi.GraphemeWidth,
-		},
-		method: customWidth{},
+		RenderBuffer: uv.NewRenderBuffer(w, h),
+		Method:       ansi.GraphemeWidth,
+		method:       customWidth{},
 	}
 	// Sanity: the wrapper actually returns a non-ansi.Method type so
 	// the fallback path is exercised end-to-end.
@@ -296,10 +294,10 @@ func TestRenderedBounds_MatchesPrintStringTallyForZWJ(t *testing.T) {
 		// Tally width: rightmost non-empty cell + its width, per row.
 		gotW := 0
 		gotH := 0
-		for y := 0; y < 4; y++ {
+		for y := range 4 {
 			rowW := 0
 			rowHasContent := false
-			for x := 0; x < 64; x++ {
+			for x := range 64 {
 				cell := scr.CellAt(x, y)
 				if cell == nil || cell.IsZero() ||
 					cell.Content == " " && cell.Width == 1 &&

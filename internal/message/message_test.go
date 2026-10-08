@@ -112,7 +112,7 @@ func TestUpdate_DebouncesTextDeltas(t *testing.T) {
 	collector.reset()
 
 	// Push 5 deltas inside a single debounce window.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		msg.AppendContent("a")
 		require.NoError(t, svc.Update(t.Context(), msg))
 	}
@@ -469,7 +469,7 @@ func TestUpdate_ZeroDebounceFlushesEveryUpdate(t *testing.T) {
 	msg, err := svc.Create(t.Context(), sessionID, CreateMessageParams{Role: Assistant})
 	require.NoError(t, err)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		msg.AppendContent("x")
 		require.NoError(t, svc.Update(t.Context(), msg))
 		got, err := svc.Get(t.Context(), msg.ID)

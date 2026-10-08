@@ -1,6 +1,7 @@
 package list
 
 import (
+	"slices"
 	"strings"
 )
 
@@ -214,7 +215,7 @@ func (l *List) Prewarm(from, batch int) int {
 // needed (e.g. deciding whether a scrollbar is required).
 func (l *List) Overflows(height int) bool {
 	total := 0
-	for idx := len(l.items) - 1; idx >= 0; idx-- {
+	for idx := range slices.Backward(l.items) {
 		total += l.getItem(idx).height
 		if l.gap > 0 && idx < len(l.items)-1 {
 			total += l.gap

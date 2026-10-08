@@ -1154,14 +1154,12 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 				return nil, createErr
 			}
 		}
-		var fantasyErr *fantasy.Error
 		var providerErr *fantasy.ProviderError
-		var requestTimedOutErr *requestTimeoutError
 		const defaultTitle = "Provider Error"
 		linkStyle := lipgloss.NewStyle().Foreground(charmtone.Guac).Underline(true)
 		if isCancelErr {
 			currentAssistant.AddFinish(message.FinishReasonCanceled, "User canceled request", "")
-		} else if errors.As(err, &requestTimedOutErr) {
+		} else if requestTimedOutErr, ok := errors.AsType[*requestTimeoutError](err); ok {
 			// Checked before the provider branches so a deadline our own
 			// request timeout imposed is never reported as a provider error.
 			currentAssistant.AddFinish(message.FinishReasonError, "Request timed out", requestTimedOutErr.userMessage())
@@ -1179,7 +1177,7 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (result *
 			} else {
 				currentAssistant.AddFinish(message.FinishReasonError, cmp.Or(stringext.Capitalize(providerErr.Title), defaultTitle), providerErr.Message)
 			}
-		} else if errors.As(err, &fantasyErr) {
+		} else if fantasyErr, ok := errors.AsType[*fantasy.Error](err); ok {
 			currentAssistant.AddFinish(message.FinishReasonError, cmp.Or(stringext.Capitalize(fantasyErr.Title), defaultTitle), fantasyErr.Message)
 		} else if fantasy.IsTransportError(err) {
 			wrapped := fantasy.NewTransportError(err)

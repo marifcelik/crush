@@ -631,7 +631,7 @@ func TestGetProviderOptionsTopKExtraBody(t *testing.T) {
 	t.Run("model top_k is injected into extra_body for known custom providers", func(t *testing.T) {
 		model := Model{
 			CatwalkCfg: catwalk.Model{ID: "llama3"},
-			ModelCfg:   config.SelectedModel{Provider: "ollama", TopK: ptr(int64(40))},
+			ModelCfg:   config.SelectedModel{Provider: "ollama", TopK: new(int64(40))},
 		}
 
 		opts := getProviderOptions(model, knownCustomProviderCfg)
@@ -649,7 +649,7 @@ func TestGetProviderOptionsTopKExtraBody(t *testing.T) {
 		model := Model{
 			CatwalkCfg: catwalk.Model{
 				ID:      "llama3",
-				Options: catwalk.ModelOptions{TopK: ptr(int64(64))},
+				Options: catwalk.ModelOptions{TopK: new(int64(64))},
 			},
 			ModelCfg: config.SelectedModel{Provider: "ollama"},
 		}
@@ -686,7 +686,7 @@ func TestGetProviderOptionsTopKExtraBody(t *testing.T) {
 			CatwalkCfg: catwalk.Model{ID: "llama3"},
 			ModelCfg: config.SelectedModel{
 				Provider: "ollama",
-				TopK:     ptr(int64(40)),
+				TopK:     new(int64(40)),
 				ProviderOptions: map[string]any{
 					"extra_body": map[string]any{"top_k": 7},
 				},
@@ -705,7 +705,7 @@ func TestGetProviderOptionsTopKExtraBody(t *testing.T) {
 	t.Run("is not injected for providers outside the known-custom-provider default branch", func(t *testing.T) {
 		model := Model{
 			CatwalkCfg: catwalk.Model{ID: "glm-5.2"},
-			ModelCfg:   config.SelectedModel{Provider: "zai", TopK: ptr(int64(40))},
+			ModelCfg:   config.SelectedModel{Provider: "zai", TopK: new(int64(40))},
 		}
 		providerCfg := config.ProviderConfig{ID: string(catwalk.InferenceProviderZAI), Type: openaicompat.Name}
 
@@ -725,7 +725,7 @@ func TestGetProviderOptionsMalformedFallback(t *testing.T) {
 		CatwalkCfg: catwalk.Model{ID: "llama3"},
 		ModelCfg: config.SelectedModel{
 			Provider:        "ollama",
-			TopK:            ptr(int64(40)),
+			TopK:            new(int64(40)),
 			ProviderOptions: map[string]any{"user": 5.0},
 		},
 	}
@@ -763,17 +763,17 @@ func TestCallTopK(t *testing.T) {
 		{
 			name:        "passed through for openai-compat hosted providers",
 			providerCfg: config.ProviderConfig{ID: "zai", Type: openaicompat.Name},
-			want:        ptr(int64(40)),
+			want:        new(int64(40)),
 		},
 		{
 			name:        "passed through for anthropic",
 			providerCfg: config.ProviderConfig{ID: "anthropic", Type: catwalk.Type(anthropic.Name)},
-			want:        ptr(int64(40)),
+			want:        new(int64(40)),
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := callTopK(tc.providerCfg, ptr(int64(40)))
+			got := callTopK(tc.providerCfg, new(int64(40)))
 			if tc.want == nil {
 				assert.Nil(t, got)
 				return
@@ -789,7 +789,8 @@ func TestCallTopK(t *testing.T) {
 	})
 }
 
-func ptr[T any](v T) *T { return &v }
+//go:fix inline
+func ptr[T any](v T) *T { return new(v) }
 
 func TestCoordinatorSetMainAgent(t *testing.T) {
 	t.Run("switches current agent", func(t *testing.T) {

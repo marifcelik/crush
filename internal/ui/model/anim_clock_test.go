@@ -40,12 +40,12 @@ func newAnimTestUI(t *testing.T) (u *UI, top, bottom *spinTestItem) {
 	t.Helper()
 	u = newFrameTestUI(t)
 	items := make([]chat.MessageItem, 0, 200)
-	top = &spinTestItem{testMessageItem: testMessageItem{id: "top", text: "top"}, spinning: true}
+	top = &spinTestItem{id: "top", text: "top", spinning: true}
 	items = append(items, top)
 	for i := 1; i < 199; i++ {
-		items = append(items, &focusableTestItem{testMessageItem: testMessageItem{id: strconv.Itoa(i), text: "line"}})
+		items = append(items, &focusableTestItem{id: strconv.Itoa(i), text: "line"})
 	}
-	bottom = &spinTestItem{testMessageItem: testMessageItem{id: "bottom", text: "bottom\n1\n2\n3\n4\n5"}, spinning: true}
+	bottom = &spinTestItem{id: "bottom", text: "bottom\n1\n2\n3\n4\n5", spinning: true}
 	items = append(items, bottom)
 	u.chat.SetMessages(items...)
 	u.chat.ScrollToBottom()
@@ -226,7 +226,7 @@ func (l *throttledTestItem) Advance() bool {
 func TestAnimClock_UnchangedFrameIsScrollOnlyButKeepsClock(t *testing.T) {
 	t.Parallel()
 	u := newFrameTestUI(t)
-	item := &throttledTestItem{spinTestItem: spinTestItem{testMessageItem: testMessageItem{id: "th", text: "th"}, spinning: true}}
+	item := &throttledTestItem{id: "th", text: "th", spinning: true}
 	u.chat.SetMessages(item)
 	_, _ = u.Update(neutralMsg{})
 	u.View()

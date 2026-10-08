@@ -31,7 +31,7 @@ func TestFrameCache_PutGet(t *testing.T) {
 	_, _, ok := c.get(key)
 	require.False(t, ok)
 
-	c.put(key, "frame", &tea.Cursor{Position: tea.Position{X: 1, Y: 2}})
+	c.put(key, "frame", &tea.Cursor{X: 1, Y: 2})
 	content, cursor, ok := c.get(key)
 	require.True(t, ok)
 	require.Equal(t, "frame", content)
@@ -46,7 +46,7 @@ func TestFrameCache_CursorIsCopied(t *testing.T) {
 	t.Parallel()
 	c, _ := newTestFrameCache(time.Second, 4)
 	key := frameKey{width: 80, height: 24}
-	orig := &tea.Cursor{Position: tea.Position{X: 1}}
+	orig := &tea.Cursor{X: 1}
 	c.put(key, "frame", orig)
 	orig.X = 99
 
@@ -192,7 +192,7 @@ func frameTestItems(prefix string) []chat.MessageItem {
 	items := make([]chat.MessageItem, 0, 200)
 	for i := range 200 {
 		items = append(items, &focusableTestItem{
-			testMessageItem: testMessageItem{id: strconv.Itoa(i), text: prefix + " " + strconv.Itoa(i)},
+			id: strconv.Itoa(i), text: prefix + " " + strconv.Itoa(i),
 		})
 	}
 	return items

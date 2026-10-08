@@ -23,8 +23,8 @@ func TestOmlxEnricher(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(omlxModelsStatusResponse{
 				Models: []omlxModelStatus{
-					{ID: "qwen3:latest", MaxContextWindow: ptr(int64(32768)), MaxTokens: ptr(int64(16384))},
-					{ID: "llama3:latest", MaxContextWindow: ptr(int64(8192)), MaxTokens: ptr(int64(4096))},
+					{ID: "qwen3:latest", MaxContextWindow: new(int64(32768)), MaxTokens: new(int64(16384))},
+					{ID: "llama3:latest", MaxContextWindow: new(int64(8192)), MaxTokens: new(int64(4096))},
 				},
 			})
 		}))
@@ -54,7 +54,7 @@ func TestOmlxEnricher(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(omlxModelsStatusResponse{
 				Models: []omlxModelStatus{
-					{ID: "m1", MaxContextWindow: ptr(int64(32768)), MaxTokens: ptr(int64(16384))},
+					{ID: "m1", MaxContextWindow: new(int64(32768)), MaxTokens: new(int64(16384))},
 				},
 			})
 		}))
@@ -89,4 +89,5 @@ func TestOmlxEnricher(t *testing.T) {
 	})
 }
 
-func ptr[T any](v T) *T { return &v }
+//go:fix inline
+func ptr[T any](v T) *T { return new(v) }

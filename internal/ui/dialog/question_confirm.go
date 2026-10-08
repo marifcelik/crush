@@ -192,7 +192,7 @@ func (c *ConfirmComponent) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	// Title.
 	titleWrapped := ansi.Wrap(c.Title, area.Dx()-iconWidth, "")
-	for _, l := range strings.Split(titleWrapped, "\n") {
+	for l := range strings.SplitSeq(titleWrapped, "\n") {
 		lines = append(lines, line{text: iconPrompt + c.Styles.Editor.QuestionUnselected.Render(l)})
 	}
 	lines = append(lines, line{}) // blank
@@ -206,11 +206,11 @@ func (c *ConfirmComponent) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		mu.Unlock()
 		if err == nil {
 			desc = strings.TrimSuffix(desc, "\n")
-			for _, l := range strings.Split(desc, "\n") {
+			for l := range strings.SplitSeq(desc, "\n") {
 				lines = append(lines, line{text: l})
 			}
 		} else {
-			for _, l := range strings.Split(c.Description, "\n") {
+			for l := range strings.SplitSeq(c.Description, "\n") {
 				lines = append(lines, line{text: l})
 			}
 		}
@@ -251,10 +251,7 @@ func (c *ConfirmComponent) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	overflow := viewport > 0 && totalLines > viewport
 
 	// Clamp scroll offset.
-	maxScroll := totalLines - viewport
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
+	maxScroll := max(totalLines-viewport, 0)
 	if c.scrollOffset > maxScroll {
 		c.scrollOffset = maxScroll
 	}

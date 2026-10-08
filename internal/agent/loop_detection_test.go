@@ -17,9 +17,7 @@ func makeStep(calls []fantasy.ToolCallContent, results []fantasy.ToolResultConte
 		content = append(content, r)
 	}
 	return fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: content,
-		},
+		Content: content,
 	}
 }
 
@@ -39,10 +37,8 @@ func makeToolStep(name, input, output string) fantasy.StepResult {
 // makeEmptyStep creates a step with no tool calls (e.g. a text-only response).
 func makeEmptyStep() fantasy.StepResult {
 	return fantasy.StepResult{
-		Response: fantasy.Response{
-			Content: fantasy.ResponseContent{
-				fantasy.TextContent{Text: "thinking..."},
-			},
+		Content: fantasy.ResponseContent{
+			fantasy.TextContent{Text: "thinking..."},
 		},
 	}
 }

@@ -33,7 +33,7 @@ func TestFileList(t *testing.T) {
 		}
 		got := fileList(st, "/", files, 10, 10)
 		plain := stripANSI(got)
-		for _, line := range strings.Split(plain, "\n") {
+		for line := range strings.SplitSeq(plain, "\n") {
 			require.LessOrEqual(t, lipgloss.Width(line), 10, "line exceeds sidebar width: %q", line)
 		}
 	})
@@ -49,7 +49,7 @@ func TestFileList(t *testing.T) {
 		plain := stripANSI(got)
 		require.Contains(t, plain, "+5")
 		require.Contains(t, plain, "-3")
-		for _, line := range strings.Split(plain, "\n") {
+		for line := range strings.SplitSeq(plain, "\n") {
 			require.LessOrEqual(t, lipgloss.Width(line), 20, "line exceeds sidebar width: %q", line)
 		}
 	})
@@ -78,7 +78,7 @@ func TestFileList(t *testing.T) {
 		plain := stripANSI(got)
 		require.Contains(t, plain, "+3")
 		require.NotContains(t, plain, "-0")
-		for _, line := range strings.Split(plain, "\n") {
+		for line := range strings.SplitSeq(plain, "\n") {
 			require.LessOrEqual(t, lipgloss.Width(line), 20, "line exceeds sidebar width: %q", line)
 		}
 	})
@@ -94,7 +94,7 @@ func TestFileList(t *testing.T) {
 		plain := stripANSI(got)
 		require.NotContains(t, plain, "+0")
 		require.Contains(t, plain, "-7")
-		for _, line := range strings.Split(plain, "\n") {
+		for line := range strings.SplitSeq(plain, "\n") {
 			require.LessOrEqual(t, lipgloss.Width(line), 20, "line exceeds sidebar width: %q", line)
 		}
 	})

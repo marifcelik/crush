@@ -75,8 +75,8 @@ func TestProtoToMessagePrismModel(t *testing.T) {
 		PrismModelID:   "prism-42",
 		PrismModelName: "GLM 5.3",
 
-		PrismHypercreditSavings: protoPtrFloat(1.5),
-		PrismDollarSavings:      protoPtrFloat(0.002),
+		PrismHypercreditSavings: new(1.5),
+		PrismDollarSavings:      new(0.002),
 	}
 
 	got := protoToMessage(src)
@@ -88,7 +88,8 @@ func TestProtoToMessagePrismModel(t *testing.T) {
 	require.Equal(t, 0.002, *got.PrismDollarSavings)
 }
 
-func protoPtrFloat(v float64) *float64 { return &v }
+//go:fix inline
+func protoPtrFloat(v float64) *float64 { return new(v) }
 
 // TestClientWorkspace_PermissionGrantMapping verifies that
 // PermissionGrant on the ClientWorkspace serializes a one-time grant

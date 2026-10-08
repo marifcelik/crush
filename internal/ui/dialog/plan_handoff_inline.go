@@ -524,7 +524,7 @@ func (p *PlanHandoffInline) selectionPointAt(x, y int, clampToArea bool) (planHa
 	cursor = editor.Cursor()
 
 	offset := column
-	for i := 0; i < lineIndex; i++ {
+	for i := range lineIndex {
 		offset += utf8.RuneCountInString(lines[i]) + 1
 	}
 	return planHandoffSelectionPoint{

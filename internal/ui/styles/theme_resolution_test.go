@@ -24,7 +24,7 @@ func TestLoadTheme_UserFileShadowsBuiltin(t *testing.T) {
 
 	tf := &ThemeFile{
 		Base:    "charmtone-panther",
-		Palette: Palette{Primary: "#ff0000"},
+		Primary: "#ff0000",
 	}
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "charmtone-panther.json"), tf))
 
@@ -38,11 +38,9 @@ func TestLoadTheme_UserOnlyTheme(t *testing.T) {
 	setTestThemeDirs(t, []string{dir})
 
 	tf := &ThemeFile{
-		Base: "gruvbox-dark",
-		Palette: Palette{
-			Primary: "#111111",
-			BgBase:  "#222222",
-		},
+		Base:    "gruvbox-dark",
+		Primary: "#111111",
+		BgBase:  "#222222",
 	}
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "my-custom.json"), tf))
 
@@ -57,11 +55,11 @@ func TestLoadTheme_UserThemeCanInheritUserTheme(t *testing.T) {
 
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "parent.json"), &ThemeFile{
 		Base:    "gruvbox-dark",
-		Palette: Palette{Primary: "#111111"},
+		Primary: "#111111",
 	}))
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "child.json"), &ThemeFile{
-		Base:    "parent",
-		Palette: Palette{Secondary: "#222222"},
+		Base:      "parent",
+		Secondary: "#222222",
 	}))
 
 	resolved, err := ExportResolvedPalette("child")
@@ -89,7 +87,7 @@ func TestForkedTheme_KeepsLoadingAfterSourceBaseDeleted(t *testing.T) {
 
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "parent.json"), &ThemeFile{
 		Base:    "gruvbox-dark",
-		Palette: Palette{Primary: "#111111"},
+		Primary: "#111111",
 	}))
 
 	// Fork the user theme the way the theme dialog does when creating a
@@ -159,7 +157,7 @@ func TestListAllThemes_ShowsOverridden(t *testing.T) {
 	dir := t.TempDir()
 	setTestThemeDirs(t, []string{dir})
 
-	tf := &ThemeFile{Base: "gruvbox-dark", Palette: Palette{Primary: "#ff0000"}}
+	tf := &ThemeFile{Base: "gruvbox-dark", Primary: "#ff0000"}
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "gruvbox-dark.json"), tf))
 
 	infos := ListAllThemes()
@@ -179,7 +177,7 @@ func TestRevertOverriddenTheme_RestoresBuiltin(t *testing.T) {
 
 	// Override a built-in with a custom primary color.
 	path := filepath.Join(dir, "gruvbox-dark.json")
-	tf := &ThemeFile{Base: "gruvbox-dark", Palette: Palette{Primary: "#ff0000"}}
+	tf := &ThemeFile{Base: "gruvbox-dark", Primary: "#ff0000"}
 	require.NoError(t, SaveThemeFile(path, tf))
 
 	// The built-in now reports as overridden.
@@ -289,7 +287,7 @@ func TestExportResolvedPalette_UserTheme(t *testing.T) {
 
 	userTf := &ThemeFile{
 		Base:    "charmtone-panther",
-		Palette: Palette{Primary: "#ff0000"},
+		Primary: "#ff0000",
 	}
 	require.NoError(t, SaveThemeFile(filepath.Join(dir, "custom.json"), userTf))
 

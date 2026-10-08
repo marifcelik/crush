@@ -681,8 +681,8 @@ func parseModelString(s string) (string, string) {
 	if s == "" {
 		return "", ""
 	}
-	if idx := strings.Index(s, "/"); idx >= 0 {
-		return s[:idx], s[idx+1:]
+	if before, after, ok := strings.Cut(s, "/"); ok {
+		return before, after
 	}
 	return "", s
 }

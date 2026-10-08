@@ -1338,8 +1338,7 @@ func isOAuthInitErr(err error) bool {
 	if errors.Is(err, mcpoauth.ErrInteractiveAuthRequired) {
 		return true
 	}
-	var rErr *oauth2.RetrieveError
-	if errors.As(err, &rErr) {
+	if rErr, ok := errors.AsType[*oauth2.RetrieveError](err); ok {
 		return rErr.ErrorCode == "invalid_grant" || rErr.ErrorCode == "invalid_client"
 	}
 	msg := err.Error()

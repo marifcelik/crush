@@ -490,17 +490,11 @@ func (f *QuestionForm) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 				counter := fmt.Sprintf("%d/%d", f.activeIdx+1, n)
 				activeLabel := labels[f.activeIdx]
 				combined := activeLabel + " · " + counter
-				maxLabel := avail - tabPadX*2 - 2
-				if maxLabel < 3 {
-					maxLabel = 3
-				}
+				maxLabel := max(avail-tabPadX*2-2, 3)
 				if ansi.StringWidth(combined) > maxLabel {
 					// Truncate the label part to fit.
 					counterPart := " · " + counter
-					labelBudget := maxLabel - ansi.StringWidth(counterPart)
-					if labelBudget < 1 {
-						labelBudget = 1
-					}
+					labelBudget := max(maxLabel-ansi.StringWidth(counterPart), 1)
 					combined = ansi.Truncate(activeLabel, labelBudget, "…") + counterPart
 				}
 				for i := range labels {

@@ -734,7 +734,7 @@ func TestMCPConfigEqualExhaustive(t *testing.T) {
 		"OAuthToken": true, // internally managed, refreshed out-of-band.
 	}
 
-	typ := reflect.TypeOf(config.MCPConfig{})
+	typ := reflect.TypeFor[config.MCPConfig]()
 	for i := range typ.NumField() {
 		name := typ.Field(i).Name
 		if excluded[name] {

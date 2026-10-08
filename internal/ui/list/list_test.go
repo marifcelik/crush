@@ -788,7 +788,7 @@ func TestList_Prewarm(t *testing.T) {
 	// Warm the first three items; only those render.
 	next := l.Prewarm(0, 3)
 	require.Equal(t, 3, next)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		require.Equal(t, 1, tracked[i].renderHits, "warmed item %d", i)
 	}
 	for i := 3; i < 6; i++ {

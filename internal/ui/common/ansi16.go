@@ -199,8 +199,8 @@ func StripCursorControl(s string) string {
 func simulateCarriageReturns(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
-		if idx := strings.LastIndex(line, "\r"); idx >= 0 {
-			lines[i] = line[idx+1:]
+		if _, after, ok := strings.CutLast(line, "\r"); ok {
+			lines[i] = after
 		}
 	}
 	return strings.Join(lines, "\n")

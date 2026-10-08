@@ -20,8 +20,8 @@ type Schema struct {
 }
 
 var (
-	timeType  = reflect.TypeOf(time.Time{})
-	errorType = reflect.TypeOf((*error)(nil)).Elem()
+	timeType  = reflect.TypeFor[time.Time]()
+	errorType = reflect.TypeFor[error]()
 )
 
 // SchemaOf derives a [Schema] from the type of v, honoring encoding/json
@@ -95,8 +95,8 @@ func structSchema(t reflect.Type, pkg string, expanding map[reflect.Type]bool) *
 	defer delete(expanding, t)
 
 	s := &Schema{Type: "object"}
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
+		f := f
 		tag := f.Tag.Get("json")
 		if tag == "-" {
 			continue
