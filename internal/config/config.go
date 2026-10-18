@@ -427,7 +427,10 @@ type Options struct {
 	Progress                  *bool        `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
 	Notifications             string       `json:"notifications,omitempty" jsonschema:"description=Notification style to use. Options: auto (default)\\, native\\, osc\\, bell\\, disabled. Auto selects based on environment: native for local sessions\\, osc for SSH (with automatic OSC 99/777 detection).,enum=auto,enum=native,enum=osc,enum=bell,enum=disabled,default=auto"`
 	DisabledSkills            []string     `json:"disabled_skills,omitempty" jsonschema:"description=List of skill names to disable and hide from the agent,example=crush-config"`
-	RequestTimeout            *int         `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
+	// TaskAgentSmallModel runs the `agent` tool's sub-agent on the
+	// selected small model instead of the large model.
+	TaskAgentSmallModel bool `json:"task_agent_small_model,omitempty" jsonschema:"description=Run the agent tool sub-agent on the small model,default=false"`
+	RequestTimeout      *int `json:"request_timeout,omitempty" jsonschema:"description=Timeout in seconds for each LLM API request. Streaming responses are aborted only after this much inactivity\\, so slow but active streams are never killed. 0 disables it\\, negative values are invalid.,default=60,example=120,example=300,example=0"`
 }
 
 // DefaultRequestTimeout bounds each LLM API request when the user has not
@@ -1095,6 +1098,11 @@ func filterSlice(data []string, mask []string, include bool) []string {
 func (c *Config) SetupAgents() {
 	allowedTools := resolveAllowedTools(allToolNames(), c.Options.DisabledTools)
 
+	taskModel := SelectedModelTypeLarge
+	if c.Options.TaskAgentSmallModel {
+		taskModel = SelectedModelTypeSmall
+	}
+
 	agents := map[string]Agent{
 		AgentCoder: {
 			ID:           AgentCoder,
@@ -1109,7 +1117,7 @@ func (c *Config) SetupAgents() {
 			ID:           AgentTask,
 			Name:         "Task",
 			Description:  "An agent that helps with searching for context and finding implementation details.",
-			Model:        SelectedModelTypeLarge,
+			Model:        taskModel,
 			ContextPaths: c.Options.ContextPaths,
 			AllowedTools: resolveReadOnlyTools(allowedTools),
 			// NO MCPs or LSPs by default

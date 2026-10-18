@@ -831,6 +831,11 @@ func TestLargeModelCfgFor(t *testing.T) {
 
 	regular := config.SelectedModel{Provider: "testprov", Model: "regular"}
 	cfg.Config().Models[config.SelectedModelTypeLarge] = regular
+	small := config.SelectedModel{Provider: "testprov", Model: "small"}
+	cfg.Config().Models[config.SelectedModelTypeSmall] = small
+	// The test env loads the user's real global config; drop its plan-mode
+	// override so the assertions below are deterministic.
+	cfg.Config().PlanMode = nil
 
 	coord := &coordinator{cfg: cfg}
 
@@ -859,4 +864,74 @@ func TestLargeModelCfgFor(t *testing.T) {
 	got, ok = coord.largeModelCfgFor(config.AgentTask)
 	require.True(t, ok)
 	require.Equal(t, regular, got)
+
+	// With task_agent_small_model enabled the task agent runs on the
+	// small model while everyone else keeps the large one.
+	cfg.Config().Options.TaskAgentSmallModel = true
+	cfg.SetupAgents()
+
+	got, ok = coord.largeModelCfgFor(config.AgentTask)
+	require.True(t, ok)
+	require.Equal(t, small, got)
+
+	got, ok = coord.largeModelCfgFor(config.AgentCoder)
+	require.True(t, ok)
+	require.Equal(t, regular, got)
+}
+
+func TestApplyReasoningEffort(t *testing.T) {
+	newModel := func() Model {
+		return Model{
+			CatwalkCfg: catwalk.Model{
+				ID:              "test-model",
+				Name:            "Test Model",
+				CanReason:       true,
+				ReasoningLevels: []string{"low", "medium", "high"},
+			},
+			ModelCfg: config.SelectedModel{ReasoningEffort: "medium"},
+		}
+	}
+
+	t.Run("empty is a no-op", func(t *testing.T) {
+		m := newModel()
+		require.NoError(t, applyReasoningEffort(&m, ""))
+		require.Equal(t, "medium", m.ModelCfg.ReasoningEffort)
+		require.False(t, m.DisableReasoning)
+	})
+
+	t.Run("off disables thinking and the effort fallback", func(t *testing.T) {
+		m := newModel()
+		require.NoError(t, applyReasoningEffort(&m, "off"))
+		require.False(t, m.ModelCfg.Think)
+		require.Empty(t, m.ModelCfg.ReasoningEffort)
+		require.True(t, m.DisableReasoning)
+		require.Empty(t, effectiveReasoningEffort(m))
+	})
+
+	t.Run("valid level sets the effort", func(t *testing.T) {
+		m := newModel()
+		require.NoError(t, applyReasoningEffort(&m, "high"))
+		require.True(t, m.ModelCfg.Think)
+		require.Equal(t, "high", m.ModelCfg.ReasoningEffort)
+		require.Equal(t, "high", effectiveReasoningEffort(m))
+	})
+
+	t.Run("max picks the highest level", func(t *testing.T) {
+		m := newModel()
+		require.NoError(t, applyReasoningEffort(&m, "max"))
+		require.Equal(t, "high", m.ModelCfg.ReasoningEffort)
+	})
+
+	t.Run("invalid level errors", func(t *testing.T) {
+		m := newModel()
+		err := applyReasoningEffort(&m, "xhigh")
+		require.ErrorContains(t, err, "not a supported level")
+	})
+
+	t.Run("reasoning-incapable model errors", func(t *testing.T) {
+		m := newModel()
+		m.CatwalkCfg.CanReason = false
+		err := applyReasoningEffort(&m, "low")
+		require.ErrorContains(t, err, "does not support reasoning")
+	})
 }

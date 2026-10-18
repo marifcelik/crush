@@ -17,6 +17,11 @@ var agentToolDescription string
 
 type AgentParams struct {
 	Prompt string `json:"prompt" description:"The task for the agent to perform"`
+	// ReasoningEffort tunes the sub-agent model's thinking for this task:
+	// "off" for simple work like summarization, a level name such as
+	// "low", "medium", or "high" (whatever the model supports), or "max"
+	// for the highest supported level when hard reasoning is needed.
+	ReasoningEffort string `json:"reasoning_effort,omitempty" description:"Optional reasoning effort for the sub-agent model: \"off\" to disable thinking, a supported level name (e.g. low, medium, high), or \"max\" for the highest level. Use low/off for trivial tasks like summarization and max for hard inference. Omit to use the model default."`
 }
 
 const (
@@ -56,12 +61,13 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 			}
 
 			return c.runSubAgent(ctx, subAgentParams{
-				Agent:          agent,
-				SessionID:      sessionID,
-				AgentMessageID: agentMessageID,
-				ToolCallID:     call.ID,
-				Prompt:         params.Prompt,
-				SessionTitle:   "New Agent Session",
+				Agent:           agent,
+				SessionID:       sessionID,
+				AgentMessageID:  agentMessageID,
+				ToolCallID:      call.ID,
+				Prompt:          params.Prompt,
+				ReasoningEffort: params.ReasoningEffort,
+				SessionTitle:    "New Agent Session",
 			})
 		},
 	), nil

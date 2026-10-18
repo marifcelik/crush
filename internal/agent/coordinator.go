@@ -426,7 +426,7 @@ func (c *coordinator) run(ctx context.Context, accept *AcceptedRun, sessionID st
 // It prefers the user-selected effort when valid, otherwise the model default when
 // valid, and finally falls back to the first configured reasoning level.
 func effectiveReasoningEffort(model Model) string {
-	if !model.CatwalkCfg.CanReason {
+	if !model.CatwalkCfg.CanReason || model.DisableReasoning {
 		return ""
 	}
 
@@ -928,11 +928,12 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent, isSubA
 	return filteredTools, nil
 }
 
-// largeModelCfgFor returns the large-model selection to use for the named
-// agent. The plan agent uses plan_mode.plan_model when configured, so plan
-// mode can run on a different model than coding. Coding (and any other
-// agent, sub-agents, or an empty name) uses the regular large model. An
-// unset or invalid override also falls back to the regular large model.
+// largeModelCfgFor returns the model selection an agent's conversation runs
+// on. The plan agent uses plan_mode.plan_model when configured, so plan mode
+// can run on a different model than coding. Otherwise the agent's configured
+// model type wins (the task agent can be moved to the small model via
+// options.task_agent_small_model), with large as the default for unknown or
+// unnamed agents.
 func (c *coordinator) largeModelCfgFor(agentName string) (config.SelectedModel, bool) {
 	var override *config.SelectedModel
 	if agentName == config.AgentPlan {
@@ -941,7 +942,11 @@ func (c *coordinator) largeModelCfgFor(agentName string) (config.SelectedModel, 
 	if override != nil {
 		return *override, true
 	}
-	largeModelCfg, ok := c.cfg.Config().Models[config.SelectedModelTypeLarge]
+	modelType := config.SelectedModelTypeLarge
+	if agent, ok := c.cfg.Config().Agents[agentName]; ok && agent.Model != "" {
+		modelType = agent.Model
+	}
+	largeModelCfg, ok := c.cfg.Config().Models[modelType]
 	return largeModelCfg, ok
 }
 
@@ -1621,6 +1626,9 @@ type subAgentParams struct {
 	ToolCallID     string
 	Prompt         string
 	SessionTitle   string
+	// ReasoningEffort optionally overrides the sub-agent model's reasoning
+	// setting for this run. See applyReasoningEffort for accepted values.
+	ReasoningEffort string
 	// SessionSetup is an optional callback invoked after session creation
 	// but before agent execution, for custom session configuration.
 	SessionSetup func(sessionID string)
@@ -1635,6 +1643,46 @@ func callTopK(providerCfg config.ProviderConfig, topK *int64) *int64 {
 		return nil
 	}
 	return topK
+}
+
+// applyReasoningEffort overrides the reasoning settings of a per-run model
+// copy for a sub-agent. Accepted values: "off" disables thinking entirely, a
+// level name ("low", "medium", "high", ...) must be one of the model's
+// supported reasoning levels, and "max" selects the highest supported level.
+// Empty values are a no-op.
+func applyReasoningEffort(model *Model, effort string) error {
+	switch effort = strings.ToLower(strings.TrimSpace(effort)); effort {
+	case "":
+		return nil
+	case "off", "none", "disabled", "false":
+		model.ModelCfg.Think = false
+		model.ModelCfg.ReasoningEffort = ""
+		model.DisableReasoning = true
+		return nil
+	case "max":
+		if len(model.CatwalkCfg.ReasoningLevels) == 0 {
+			return fmt.Errorf("reasoning_effort: model %s has no reasoning levels", model.CatwalkCfg.Name)
+		}
+		effort = model.CatwalkCfg.ReasoningLevels[len(model.CatwalkCfg.ReasoningLevels)-1]
+	case "on", "true":
+		if len(model.CatwalkCfg.ReasoningLevels) == 0 {
+			return fmt.Errorf("reasoning_effort: model %s has no reasoning levels", model.CatwalkCfg.Name)
+		}
+		effort = model.CatwalkCfg.ReasoningLevels[0]
+	}
+	if !model.CatwalkCfg.CanReason {
+		return fmt.Errorf("reasoning_effort: model %s does not support reasoning", model.CatwalkCfg.Name)
+	}
+	if !slices.Contains(model.CatwalkCfg.ReasoningLevels, effort) {
+		return fmt.Errorf(
+			"reasoning_effort: %q is not a supported level for model %s; supported: %s, or \"off\"",
+			effort, model.CatwalkCfg.Name, strings.Join(model.CatwalkCfg.ReasoningLevels, ", "),
+		)
+	}
+	model.ModelCfg.Think = true
+	model.ModelCfg.ReasoningEffort = effort
+	model.DisableReasoning = false
+	return nil
 }
 
 // runSubAgent runs a sub-agent and handles session management and cost accumulation.
@@ -1655,6 +1703,9 @@ func (c *coordinator) runSubAgent(ctx context.Context, params subAgentParams) (f
 
 	// Get model configuration
 	model := params.Agent.Model()
+	if err := applyReasoningEffort(&model, params.ReasoningEffort); err != nil {
+		return fantasy.NewTextErrorResponse(err.Error()), nil
+	}
 	maxTokens := model.CatwalkCfg.DefaultMaxTokens
 	if model.ModelCfg.MaxTokens != 0 {
 		maxTokens = model.ModelCfg.MaxTokens

@@ -155,6 +155,11 @@ type Model struct {
 	CatwalkCfg catwalk.Model
 	ModelCfg   config.SelectedModel
 	FlatRate   bool
+
+	// DisableReasoning suppresses the reasoning-effort fallbacks in
+	// getProviderOptions, so sub-agents can fully turn thinking off. It is
+	// only set on per-run model copies, never on the shared selection.
+	DisableReasoning bool
 }
 
 // activeCancel wraps a context.CancelFunc with a unique pointer identity.
