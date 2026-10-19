@@ -4,6 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
+	"strings"
+	"text/template"
 
 	"charm.land/fantasy"
 
@@ -12,8 +15,33 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 )
 
-//go:embed templates/agent_tool.md
-var agentToolDescription string
+//go:embed templates/agent_tool.md.tpl
+var agentToolDescriptionTmpl string
+
+var agentToolDescriptionTemplate = template.Must(template.New("agent_tool").Parse(agentToolDescriptionTmpl))
+
+// agentToolTemplateData carries the sub-agent model's capabilities into the
+// tool description, so the parent model only learns about reasoning_effort
+// and image viewing when the selected model actually supports them.
+type agentToolTemplateData struct {
+	CanReason       bool
+	HasVision       bool
+	ReasoningLevels string
+}
+
+// agentToolDescriptionFor renders the tool description for the given model.
+func agentToolDescriptionFor(model Model) (string, error) {
+	var sb strings.Builder
+	data := agentToolTemplateData{
+		CanReason:       model.CatwalkCfg.CanReason,
+		HasVision:       model.CatwalkCfg.SupportsImages,
+		ReasoningLevels: strings.Join(model.CatwalkCfg.ReasoningLevels, ", "),
+	}
+	if err := agentToolDescriptionTemplate.Execute(&sb, data); err != nil {
+		return "", fmt.Errorf("rendering agent tool description: %w", err)
+	}
+	return sb.String(), nil
+}
 
 type AgentParams struct {
 	Prompt string `json:"prompt" description:"The task for the agent to perform"`
@@ -42,9 +70,13 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 	if err != nil {
 		return nil, err
 	}
+	description, err := agentToolDescriptionFor(agent.Model())
+	if err != nil {
+		return nil, err
+	}
 	return fantasy.NewParallelAgentTool(
 		AgentToolName,
-		agentToolDescription,
+		description,
 		func(ctx context.Context, params AgentParams, call fantasy.ToolCall) (fantasy.ToolResponse, error) {
 			if params.Prompt == "" {
 				return fantasy.NewTextErrorResponse("prompt is required"), nil

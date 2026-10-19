@@ -834,8 +834,11 @@ func TestLargeModelCfgFor(t *testing.T) {
 	small := config.SelectedModel{Provider: "testprov", Model: "small"}
 	cfg.Config().Models[config.SelectedModelTypeSmall] = small
 	// The test env loads the user's real global config; drop its plan-mode
-	// override so the assertions below are deterministic.
+	// override and task-agent model option so the assertions below are
+	// deterministic.
 	cfg.Config().PlanMode = nil
+	cfg.Config().Options.TaskAgentSmallModel = false
+	cfg.SetupAgents()
 
 	coord := &coordinator{cfg: cfg}
 
