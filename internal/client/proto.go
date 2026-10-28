@@ -470,6 +470,24 @@ func (c *Client) GetAgentInfo(ctx context.Context, id string) (*proto.AgentInfo,
 	return &info, nil
 }
 
+// GetAgentSessionContextUsage retrieves the estimated context usage
+// breakdown for a session from the workspace's agent.
+func (c *Client) GetAgentSessionContextUsage(ctx context.Context, id, sessionID string) (*proto.ContextUsage, error) {
+	rsp, err := c.get(ctx, fmt.Sprintf("/workspaces/%s/agent/sessions/%s/context-usage", id, sessionID), nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session context usage: %w", err)
+	}
+	defer rsp.Body.Close()
+	if err := checkStatus(rsp); err != nil {
+		return nil, fmt.Errorf("failed to get session context usage: %w", err)
+	}
+	var usage proto.ContextUsage
+	if err := json.NewDecoder(rsp.Body).Decode(&usage); err != nil {
+		return nil, fmt.Errorf("failed to decode session context usage: %w", err)
+	}
+	return &usage, nil
+}
+
 // UpdateAgent triggers an agent model update on the server.
 func (c *Client) UpdateAgent(ctx context.Context, id string) error {
 	rsp, err := c.post(ctx, fmt.Sprintf("/workspaces/%s/agent/update", id), nil, nil, nil)

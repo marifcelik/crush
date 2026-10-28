@@ -362,6 +362,17 @@ func (c *controllerV1) endpoints() []apigen.Endpoint {
 			Fails(404, 500).
 			Handle(c.handleGetWorkspaceAgentSession),
 
+		apigen.Get("/v1/workspaces/{id}/agent/sessions/{sid}/context-usage").
+			Summary("Get session context usage").
+			Description("Returns an estimated breakdown of how the session's context "+
+				"window is filled, by category. Values are approximations.").
+			Tags("agent").
+			PathParam("id", "Workspace ID").
+			PathParam("sid", "Session ID").
+			Responds(proto.ContextUsage{}).
+			Fails(404, 500).
+			Handle(c.handleGetWorkspaceAgentSessionContextUsage),
+
 		apigen.Post("/v1/workspaces/{id}/agent/sessions/{sid}/cancel").
 			Summary("Cancel agent session").
 			Tags("agent").

@@ -469,6 +469,15 @@ func (app *App) UpdateAgentModel(ctx context.Context) error {
 	return app.AgentCoordinator.UpdateModels(ctx)
 }
 
+// AgentContextUsage returns the estimated context window usage
+// breakdown for the session, computed by the agent coordinator.
+func (app *App) AgentContextUsage(ctx context.Context, sessionID string) (agent.ContextUsage, error) {
+	if app.AgentCoordinator == nil {
+		return agent.ContextUsage{}, fmt.Errorf("agent configuration is missing")
+	}
+	return app.AgentCoordinator.ContextUsage(ctx, sessionID)
+}
+
 // restoreModelFromSession reads the last assistant message in the
 // session and, if it used a different provider/model than the current
 // config, overrides the preferred model in-memory (non-persistent)

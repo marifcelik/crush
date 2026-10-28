@@ -49,6 +49,9 @@ func (c *errorCoordinator) Model() agent.Model                                { 
 func (c *errorCoordinator) UpdateModels(context.Context) error                { return nil }
 func (c *errorCoordinator) SetMainAgent(string) error                         { return nil }
 func (c *errorCoordinator) GenerateTitle(context.Context, string, string)     {}
+func (c *errorCoordinator) ContextUsage(context.Context, string) (agent.ContextUsage, error) {
+	return agent.ContextUsage{}, nil
+}
 
 // insertRunCompleteWorkspace installs a workspace backed by a real
 // app.App (so the runCompletions broker exists) with the given

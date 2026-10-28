@@ -328,6 +328,23 @@ func (w *ClientWorkspace) AgentSummarize(ctx context.Context, sessionID string) 
 	return w.client.AgentSummarizeSession(ctx, w.workspaceID(), sessionID)
 }
 
+func (w *ClientWorkspace) AgentContextUsage(ctx context.Context, sessionID string) (ContextUsage, error) {
+	usage, err := w.client.GetAgentSessionContextUsage(ctx, w.workspaceID(), sessionID)
+	if err != nil {
+		return ContextUsage{}, err
+	}
+	return ContextUsage{
+		UserMessages:   usage.UserMessages,
+		AgentResponses: usage.AgentResponses,
+		ToolCalls:      usage.ToolCalls,
+		SystemMessages: usage.SystemMessages,
+		SystemPrompt:   usage.SystemPrompt,
+		SystemTools:    usage.SystemTools,
+		Skills:         usage.Skills,
+		Subagents:      usage.Subagents,
+	}, nil
+}
+
 func (w *ClientWorkspace) UpdateAgentModel(ctx context.Context) error {
 	return w.client.UpdateAgent(ctx, w.workspaceID())
 }

@@ -127,6 +127,20 @@ func (a AgentInfo) IsZero() bool {
 	return !a.IsBusy && !a.IsReady && a.Model.ID == ""
 }
 
+// ContextUsage is an estimated breakdown of how a session's context
+// window is filled, by origin. All values are approximations derived
+// from content sizes, not provider token counts.
+type ContextUsage struct {
+	UserMessages   int64 `json:"user_messages"`
+	AgentResponses int64 `json:"agent_responses"`
+	ToolCalls      int64 `json:"tool_calls"`
+	SystemMessages int64 `json:"system_messages"`
+	SystemPrompt   int64 `json:"system_prompt"`
+	SystemTools    int64 `json:"system_tools"`
+	Skills         int64 `json:"skills"`
+	Subagents      int64 `json:"subagents"`
+}
+
 // AgentMessage represents a message sent to the agent.
 //
 // RunID, when non-empty, is echoed back on the [RunComplete] event

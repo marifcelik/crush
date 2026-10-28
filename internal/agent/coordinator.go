@@ -138,6 +138,9 @@ type Coordinator interface {
 	Model() Model
 	UpdateModels(ctx context.Context) error
 	GenerateTitle(ctx context.Context, sessionID, prompt string)
+	// ContextUsage estimates the main agent's context usage for the
+	// session, broken down by category. See [ContextUsage].
+	ContextUsage(ctx context.Context, sessionID string) (ContextUsage, error)
 }
 
 type coordinator struct {
@@ -1422,6 +1425,12 @@ func (c *coordinator) IsSessionBusy(sessionID string) bool {
 
 func (c *coordinator) Model() Model {
 	return c.currentAgent().Model()
+}
+
+// ContextUsage estimates the active agent's context usage for the
+// session, broken down by category.
+func (c *coordinator) ContextUsage(ctx context.Context, sessionID string) (ContextUsage, error) {
+	return c.currentAgent().ContextUsage(ctx, sessionID)
 }
 
 func (c *coordinator) UpdateModels(ctx context.Context) error {

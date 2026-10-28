@@ -1087,6 +1087,20 @@ func quickStyle(o quickStyleOpts) Styles {
 	s.Dialog.Quit.Content = lipgloss.NewStyle().Foreground(o.fgBase)
 	s.Dialog.Quit.Hint = lipgloss.NewStyle().Foreground(o.fgMostSubtle)
 	s.Dialog.Quit.Frame = lipgloss.NewStyle().BorderForeground(o.primary).Border(lipgloss.RoundedBorder()).Padding(1, 2)
+
+	// Dialog.ContextUsage
+	s.Dialog.ContextUsage.BarTrack = base.Foreground(o.bgMostVisible)
+	s.Dialog.ContextUsage.PercentText = base.Foreground(o.fgBase)
+	s.Dialog.ContextUsage.DetailValue = base.Foreground(o.fgMoreSubtle)
+	s.Dialog.ContextUsage.UserMessages = base.Foreground(o.primary)
+	s.Dialog.ContextUsage.AgentResponses = base.Foreground(o.secondary)
+	s.Dialog.ContextUsage.ToolCalls = base.Foreground(o.success)
+	s.Dialog.ContextUsage.SystemMessages = base.Foreground(o.warning)
+	s.Dialog.ContextUsage.SystemPrompt = base.Foreground(o.accent)
+	s.Dialog.ContextUsage.SystemTools = base.Foreground(o.keyword)
+	s.Dialog.ContextUsage.Skills = base.Foreground(o.info)
+	s.Dialog.ContextUsage.Subagents = base.Foreground(o.attention)
+
 	s.Dialog.View = base.Border(lipgloss.RoundedBorder()).BorderForeground(o.primary)
 	s.Dialog.PrimaryText = base.Padding(0, 1).Foreground(o.primary)
 	s.Dialog.SecondaryText = base.Padding(0, 1).Foreground(o.fgMostSubtle)

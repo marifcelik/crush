@@ -241,6 +241,23 @@ func (w *AppWorkspace) AgentSummarize(ctx context.Context, sessionID string) err
 	return w.app.AgentCoordinator.Summarize(ctx, sessionID)
 }
 
+func (w *AppWorkspace) AgentContextUsage(ctx context.Context, sessionID string) (ContextUsage, error) {
+	usage, err := w.app.AgentContextUsage(ctx, sessionID)
+	if err != nil {
+		return ContextUsage{}, err
+	}
+	return ContextUsage{
+		UserMessages:   usage.UserMessages,
+		AgentResponses: usage.AgentResponses,
+		ToolCalls:      usage.ToolCalls,
+		SystemMessages: usage.SystemMessages,
+		SystemPrompt:   usage.SystemPrompt,
+		SystemTools:    usage.SystemTools,
+		Skills:         usage.Skills,
+		Subagents:      usage.Subagents,
+	}, nil
+}
+
 func (w *AppWorkspace) UpdateAgentModel(ctx context.Context) error {
 	return w.app.UpdateAgentModel(ctx)
 }

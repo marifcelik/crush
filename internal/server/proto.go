@@ -630,6 +630,19 @@ func (c *controllerV1) handleGetWorkspaceAgentSession(w http.ResponseWriter, r *
 	jsonEncode(w, agentSession)
 }
 
+// handleGetWorkspaceAgentSessionContextUsage returns the estimated
+// context usage breakdown for a session.
+func (c *controllerV1) handleGetWorkspaceAgentSessionContextUsage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sid := r.PathValue("sid")
+	usage, err := c.backend.GetAgentContextUsage(r.Context(), id, sid)
+	if err != nil {
+		c.handleError(w, r, err)
+		return
+	}
+	jsonEncode(w, usage)
+}
+
 // handlePostWorkspaceAgentSessionCancel cancels a running agent session.
 func (c *controllerV1) handlePostWorkspaceAgentSessionCancel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

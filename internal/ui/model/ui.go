@@ -1015,6 +1015,11 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closeDialogMsg:
 		m.dialog.CloseFrontDialog()
 
+	case contextUsageMsg:
+		if cmd := m.handleContextUsageMsg(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
 	case pubsub.Event[session.Session]:
 		if msg.Type == pubsub.DeletedEvent {
 			if m.session != nil && m.session.ID == msg.Payload.ID {
@@ -1046,6 +1051,15 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.renderPills()
 			}
 			m.autoExpandPillsIfReasonable()
+
+			// Keep an open context usage dialog in sync with new
+			// token counts. The fetch runs off the update loop: it
+			// scans the whole transcript.
+			if m.dialog.ContainsDialog(dialog.ContextUsageID) && msg.Type == pubsub.UpdatedEvent {
+				if cmd := m.fetchContextUsage(msg.Payload.ID); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			}
 		}
 	case pubsub.Event[message.Message]:
 		// Check if this is a child session message for an agent tool.
@@ -3038,6 +3052,11 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 			return true
 		case key.Matches(msg, m.keyMap.Sessions):
 			if cmd := m.openSessionsDialog(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return true
+		case key.Matches(msg, m.keyMap.ContextUsage):
+			if cmd := m.openContextUsageDialog(); cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 			return true
@@ -5478,6 +5497,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openUndoDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.ContextUsageID:
+		if cmd := m.openContextUsageDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	default:
 		// Unknown dialog
 		break
@@ -5496,6 +5519,70 @@ func (m *UI) openQuitDialog() tea.Cmd {
 
 	quitDialog := dialog.NewQuit(m.com)
 	m.dialog.OpenDialog(quitDialog)
+	return nil
+}
+
+// contextUsageMsg is the result of a context usage fetch. It carries
+// the session the breakdown was computed for so a stale fetch (the
+// user switched sessions) can be dropped.
+type contextUsageMsg struct {
+	sessionID string
+	usage     workspace.ContextUsage
+	err       error
+}
+
+// openContextUsageDialog opens the context usage dialog. The breakdown
+// scans the session transcript, so it is fetched off the update loop
+// and the dialog opens when the result arrives.
+func (m *UI) openContextUsageDialog() tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.ContextUsageID) {
+		m.dialog.BringToFront(dialog.ContextUsageID)
+		return nil
+	}
+	if m.session == nil {
+		return util.ReportWarn("No active session")
+	}
+	return m.fetchContextUsage(m.session.ID)
+}
+
+// fetchContextUsage fetches the context usage breakdown for a session
+// off the update loop.
+func (m *UI) fetchContextUsage(sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		usage, err := m.com.Workspace.AgentContextUsage(context.Background(), sessionID)
+		if err != nil {
+			return contextUsageMsg{sessionID: sessionID, err: err}
+		}
+		return contextUsageMsg{sessionID: sessionID, usage: usage}
+	}
+}
+
+// handleContextUsageMsg opens or refreshes the context usage dialog
+// with a fetched breakdown.
+func (m *UI) handleContextUsageMsg(msg contextUsageMsg) tea.Cmd {
+	if msg.err != nil {
+		m.dialog.CloseDialog(dialog.ContextUsageID)
+		return util.ReportError(msg.err)
+	}
+	if m.session == nil || m.session.ID != msg.sessionID {
+		// The user switched (or closed) the session while the fetch was
+		// in flight; the breakdown is stale.
+		m.dialog.CloseDialog(dialog.ContextUsageID)
+		return nil
+	}
+
+	var modelName string
+	var contextWindow int64
+	if model := m.selectedLargeModel(); model != nil {
+		modelName = model.CatwalkCfg.Name
+		contextWindow = model.CatwalkCfg.ContextWindow
+	}
+
+	// The dialog holds no local state, so refreshing an open instance
+	// is a replace rather than a mutation.
+	m.dialog.CloseDialog(dialog.ContextUsageID)
+	usageDialog := dialog.NewContextUsage(m.com, msg.usage, contextWindow, modelName)
+	m.dialog.OpenDialog(usageDialog)
 	return nil
 }
 

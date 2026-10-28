@@ -537,6 +537,23 @@ type Styles struct {
 			Frame   lipgloss.Style // Outer rounded border framing the quit dialog
 		}
 
+		// ContextUsage styles the context usage dialog. Each category
+		// color is shared by its bar segment and its detail row so the
+		// legend maps onto the bar.
+		ContextUsage struct {
+			BarTrack       lipgloss.Style // Unfilled bar cells
+			PercentText    lipgloss.Style // Percentage label after the bar
+			DetailValue    lipgloss.Style // Token count and share in detail rows
+			UserMessages   lipgloss.Style
+			AgentResponses lipgloss.Style
+			ToolCalls      lipgloss.Style
+			SystemMessages lipgloss.Style
+			SystemPrompt   lipgloss.Style
+			SystemTools    lipgloss.Style
+			Skills         lipgloss.Style
+			Subagents      lipgloss.Style
+		}
+
 		APIKey struct {
 			Spinner lipgloss.Style // Loading spinner while validating the key
 		}

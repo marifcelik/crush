@@ -145,6 +145,34 @@ func (b *Backend) GetAgentInfo(workspaceID string) (proto.AgentInfo, error) {
 	return agentInfo, nil
 }
 
+// GetAgentContextUsage returns the estimated context usage breakdown
+// for a session from the workspace's agent.
+func (b *Backend) GetAgentContextUsage(ctx context.Context, workspaceID, sessionID string) (proto.ContextUsage, error) {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return proto.ContextUsage{}, err
+	}
+
+	if ws.AgentCoordinator == nil {
+		return proto.ContextUsage{}, ErrAgentNotInitialized
+	}
+
+	usage, err := ws.AgentCoordinator.ContextUsage(ctx, sessionID)
+	if err != nil {
+		return proto.ContextUsage{}, err
+	}
+	return proto.ContextUsage{
+		UserMessages:   usage.UserMessages,
+		AgentResponses: usage.AgentResponses,
+		ToolCalls:      usage.ToolCalls,
+		SystemMessages: usage.SystemMessages,
+		SystemPrompt:   usage.SystemPrompt,
+		SystemTools:    usage.SystemTools,
+		Skills:         usage.Skills,
+		Subagents:      usage.Subagents,
+	}, nil
+}
+
 // InitAgent initializes the coder agent for the workspace.
 func (b *Backend) InitAgent(ctx context.Context, workspaceID string, interactive bool) error {
 	ws, err := b.GetWorkspace(workspaceID)

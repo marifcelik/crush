@@ -110,6 +110,26 @@ type AgentModel struct {
 	ModelCfg   config.SelectedModel
 }
 
+// ContextUsage is an estimated breakdown of how a session's context
+// window is filled, by origin. All values are approximations derived
+// from content sizes, not provider token counts.
+type ContextUsage struct {
+	UserMessages   int64
+	AgentResponses int64
+	ToolCalls      int64
+	SystemMessages int64
+	SystemPrompt   int64
+	SystemTools    int64
+	Skills         int64
+	Subagents      int64
+}
+
+// Total returns the sum of every category.
+func (u ContextUsage) Total() int64 {
+	return u.UserMessages + u.AgentResponses + u.ToolCalls + u.SystemMessages +
+		u.SystemPrompt + u.SystemTools + u.Skills + u.Subagents
+}
+
 // Workspace is the main abstraction consumed by the TUI and CLI. It
 // groups every operation a frontend needs to perform against a running
 // workspace, regardless of whether the workspace is in-process or
@@ -161,6 +181,9 @@ type Workspace interface {
 	AgentClearQueue(sessionID string)
 	AgentSetMain(agentID string) error
 	AgentSummarize(ctx context.Context, sessionID string) error
+	// AgentContextUsage returns an estimated breakdown of how the
+	// session's context window is filled, by category.
+	AgentContextUsage(ctx context.Context, sessionID string) (ContextUsage, error)
 	UpdateAgentModel(ctx context.Context) error
 	InitCoderAgent(ctx context.Context) error
 	InitCoderAgentNonInteractive(ctx context.Context) error

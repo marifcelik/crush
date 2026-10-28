@@ -148,6 +148,9 @@ type SessionAgent interface {
 	Summarize(context.Context, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error
 	Model() Model
 	GenerateTitle(ctx context.Context, sessionID, userPrompt string)
+	// ContextUsage estimates how the session's context window is filled,
+	// broken down by category. See [ContextUsage].
+	ContextUsage(ctx context.Context, sessionID string) (ContextUsage, error)
 }
 
 type Model struct {

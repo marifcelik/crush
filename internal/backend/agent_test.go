@@ -63,6 +63,9 @@ func (c *blockingCoordinator) Summarize(context.Context, string) error          
 func (c *blockingCoordinator) Model() agent.Model                                { return agent.Model{} }
 func (c *blockingCoordinator) UpdateModels(context.Context) error                { return nil }
 func (c *blockingCoordinator) GenerateTitle(context.Context, string, string)     {}
+func (c *blockingCoordinator) ContextUsage(context.Context, string) (agent.ContextUsage, error) {
+	return agent.ContextUsage{}, nil
+}
 func (c *blockingCoordinator) SetMainAgent(agentName string) error {
 	c.lastMainAgentSet.Store(agentName)
 	return c.setMainAgentErr
