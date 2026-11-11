@@ -1590,7 +1590,7 @@ If not, please feel free to ignore. Again do not mention this message to the use
 					)
 					continue
 				}
-				toolResultsByCall[tr.ToolCallID] = append(toolResultsByCall[tr.ToolCallID], part)
+				toolResultsByCall[tr.ToolCallID] = append(toolResultsByCall[tr.ToolCallID], truncateToolResultPart(tr))
 			}
 		}
 	}
@@ -1652,6 +1652,24 @@ func filterFileParts(parts []fantasy.MessagePart) []fantasy.MessagePart {
 		filtered = append(filtered, part)
 	}
 	return filtered
+}
+
+// truncateToolResultPart bounds a stored tool result before it is sent to the
+// model. Results written before tool output was capped (or by tools that
+// return megabytes, such as browser evaluate_script dumps) would otherwise
+// blow the context window on every subsequent request, including summarize,
+// permanently bricking the session.
+func truncateToolResultPart(part fantasy.ToolResultPart) fantasy.MessagePart {
+	text, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentText](part.Output)
+	if !ok {
+		return part
+	}
+	bounded := tools.BoundOutput(text.Text)
+	if bounded == text.Text {
+		return part
+	}
+	part.Output = fantasy.ToolResultOutputContentText{Text: bounded}
+	return part
 }
 
 // toolResultsForCalls builds the tool message that must immediately follow

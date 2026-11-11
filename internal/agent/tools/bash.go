@@ -433,18 +433,34 @@ func TruncateOutput(content, spillDir string) string {
 		return content
 	}
 
-	halfLength := MaxOutputLength / 2
-	start := ansi.Truncate(content, halfLength, "")
-	end := ansi.TruncateLeft(content, ansi.StringWidth(content)-halfLength, "")
-
-	truncatedLinesCount := max(strings.Count(content, "\n")-strings.Count(start, "\n")-strings.Count(end, "\n"), 0)
-	marker := fmt.Sprintf("... [%d lines truncated] ...", truncatedLinesCount)
+	start, marker, end := truncateHeadTail(content)
 	if path, err := shell.SpillOutput(ansi.Strip(content), spillDir); err == nil {
-		marker = fmt.Sprintf("... [%d lines truncated, full output: %s] ...", truncatedLinesCount, path)
+		marker = fmt.Sprintf("%s, full output: %s", marker, path)
 	} else {
 		slog.Debug("Could not spill tool output", "dir", spillDir, "error", err)
 	}
-	return fmt.Sprintf("%s\n\n%s\n\n%s", start, marker, end)
+	return fmt.Sprintf("%s\n\n... [%s] ...\n\n%s", start, marker, end)
+}
+
+// BoundOutput truncates oversized output without spilling it to disk. Used on
+// the replay path, where the same stored result is re-sent on every request
+// and spilling would write a new file each time.
+func BoundOutput(content string) string {
+	if ansi.StringWidth(content) <= MaxOutputLength {
+		return content
+	}
+	start, marker, end := truncateHeadTail(content)
+	return fmt.Sprintf("%s\n\n... [%s] ...\n\n%s", start, marker, end)
+}
+
+func truncateHeadTail(content string) (start, marker, end string) {
+	halfLength := MaxOutputLength / 2
+	start = ansi.Truncate(content, halfLength, "")
+	end = ansi.TruncateLeft(content, ansi.StringWidth(content)-halfLength, "")
+
+	truncatedLinesCount := max(strings.Count(content, "\n")-strings.Count(start, "\n")-strings.Count(end, "\n"), 0)
+	marker = fmt.Sprintf("%d lines truncated", truncatedLinesCount)
+	return start, marker, end
 }
 
 func truncateOutput(content, spillDir string) string {

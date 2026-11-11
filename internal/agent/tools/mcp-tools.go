@@ -130,6 +130,10 @@ func (m *Tool) Run(ctx context.Context, params fantasy.ToolCall) (fantasy.ToolRe
 		return fantasy.NewTextErrorResponse(err.Error()), nil
 	}
 
+	// MCP tools can return megabytes (page dumps, evaluate_script output).
+	// Bound them like bash output so one call cannot blow the context window.
+	result.Content = TruncateOutput(result.Content, m.cfg.Config().Options.DataDirectory)
+
 	switch result.Type {
 	case "image", "media":
 		if !GetSupportsImagesFromContext(ctx) {

@@ -1351,3 +1351,60 @@ func TestProviderRetryLogFields(t *testing.T) {
 		}, fields)
 	})
 }
+
+func TestPreparePrompt_BoundsOversizedToolResult(t *testing.T) {
+	// A single tool result can be megabytes (browser evaluate_script dumps,
+	// page HTML). Left whole it lands in the session and every later request,
+	// including summarize, exceeds the model's context window.
+	env := testEnv(t)
+	sa := testSessionAgent(env, nil, nil, "test prompt")
+	agent := sa.(*sessionAgent)
+
+	ctx := t.Context()
+	sess, err := env.sessions.Create(ctx, "test")
+	require.NoError(t, err)
+
+	_, err = env.messages.Create(ctx, sess.ID, message.CreateMessageParams{
+		Role: message.Assistant,
+		Parts: []message.ContentPart{
+			message.ToolCall{
+				ID:       "call_huge",
+				Name:     "mcp_browser_evaluate_script",
+				Input:    `{}`,
+				Finished: true,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	huge := strings.Repeat("x", 5<<20)
+	_, err = env.messages.Create(ctx, sess.ID, message.CreateMessageParams{
+		Role: message.Tool,
+		Parts: []message.ContentPart{
+			message.ToolResult{ToolCallID: "call_huge", Name: "mcp_browser_evaluate_script", Content: huge},
+		},
+	})
+	require.NoError(t, err)
+
+	msgs, err := env.messages.List(ctx, sess.ID)
+	require.NoError(t, err)
+
+	history, _ := agent.preparePrompt(msgs, false)
+
+	var total int
+	for _, msg := range history {
+		for _, part := range msg.Content {
+			tr, ok := fantasy.AsMessagePart[fantasy.ToolResultPart](part)
+			if !ok {
+				continue
+			}
+			text, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentText](tr.Output)
+			if !ok {
+				continue
+			}
+			total += len(text.Text)
+		}
+	}
+	require.Less(t, total, len(huge), "oversized tool result must be bounded before sending")
+	require.LessOrEqual(t, total, tools.MaxOutputLength+256)
+}
