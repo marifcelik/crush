@@ -98,6 +98,9 @@ func (b *Backend) runAgent(ws *Workspace, msg proto.AgentMessage, accept *agent.
 	}
 	ctx = agent.WithRunCompleteMarker(ctx)
 
+	if msg.Channel != "" {
+		ctx = agent.WithChannel(ctx, msg.Channel)
+	}
 	_, err := ws.AgentCoordinator.RunAccepted(ctx, accept, msg.SessionID, msg.Prompt, proto.AttachmentsToMessage(msg.Attachments)...)
 	if err == nil || errors.Is(err, context.Canceled) {
 		return
@@ -269,6 +272,20 @@ func (b *Backend) ClearQueue(workspaceID, sessionID string) error {
 	if ws.AgentCoordinator != nil {
 		ws.AgentCoordinator.ClearQueue(sessionID)
 	}
+	return nil
+}
+
+// AddNote keeps text for the session's next prompt. It does not start a run.
+func (b *Backend) AddNote(workspaceID, sessionID, text string) error {
+	ws, err := b.GetWorkspace(workspaceID)
+	if err != nil {
+		return err
+	}
+
+	if ws.AgentCoordinator == nil {
+		return ErrAgentNotInitialized
+	}
+	ws.AgentCoordinator.AddNote(sessionID, text)
 	return nil
 }
 

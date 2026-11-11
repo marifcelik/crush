@@ -32,7 +32,7 @@ func newGateTestCoordinator(t *testing.T, interactive bool) *coordinator {
 }`
 	require.NoError(t, os.WriteFile(filepath.Join(env.workingDir, "crush.json"), []byte(crushJSON), 0o644))
 
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	cfg.SetupAgents()
 
@@ -51,7 +51,7 @@ func newGateTestCoordinator(t *testing.T, interactive bool) *coordinator {
 	require.NoError(t, err)
 	agentCfg := cfg.Config().Agents[config.AgentCoder]
 
-	agent, err := coord.buildAgent(context.Background(), p, agentCfg, false)
+	agent, err := coord.buildAgent(context.Background(), &coord.readyWg, p, agentCfg, false)
 	require.NoError(t, err)
 	coord.mainAgent = agent
 	coord.mainAgentName = config.AgentCoder
@@ -83,7 +83,7 @@ func TestRunWaitsForMCPOnlyWhenNonInteractive(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		defer cancel()
 
-		_, err := coord.run(ctx, nil, "test-session", "hello")
+		_, err := coord.run(ctx, nil, nil, "test-session", "hello")
 		require.ErrorContains(t, err, "MCP initialization",
 			"non-interactive run must block on MCP initialization")
 	})
@@ -96,7 +96,7 @@ func TestRunWaitsForMCPOnlyWhenNonInteractive(t *testing.T) {
 
 		done := make(chan error, 1)
 		go func() {
-			_, err := coord.run(context.Background(), nil, "test-session", "hello")
+			_, err := coord.run(context.Background(), nil, nil, "test-session", "hello")
 			done <- err
 		}()
 

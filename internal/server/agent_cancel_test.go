@@ -80,6 +80,7 @@ func (s *runCoordinator) IsSessionBusy(string) bool {
 func (s *runCoordinator) QueuedPrompts(string) int          { return 0 }
 func (s *runCoordinator) QueuedPromptsList(string) []string { return nil }
 func (s *runCoordinator) ClearQueue(string)                 {}
+func (s *runCoordinator) AddNote(string, string)            {}
 func (s *runCoordinator) Summarize(context.Context, string) error {
 	return nil
 }
@@ -89,6 +90,9 @@ func (s *runCoordinator) GenerateTitle(context.Context, string, string) {}
 func (s *runCoordinator) ContextUsage(context.Context, string) (agent.ContextUsage, error) {
 	return agent.ContextUsage{}, nil
 }
+func (s *runCoordinator) SetHostContext(proto.HostContext) {}
+func (s *runCoordinator) HostContext() proto.HostContext   { return proto.HostContext{} }
+
 func (s *runCoordinator) SetMainAgent(agentName string) error {
 	s.lastMainAgentSet.Store(agentName)
 	return s.setMainAgentErr
@@ -235,4 +239,8 @@ func TestPostAgent_DetachesRequestContext(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return coord.ranCount.Load() == 1
 	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func (*runCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
 }

@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 
 	"github.com/stretchr/testify/require"
 )
@@ -12,9 +12,11 @@ func TestAgentToolDescriptionFor(t *testing.T) {
 	t.Parallel()
 
 	capable := Model{CatwalkCfg: catwalk.Model{
-		CanReason:       true,
-		ReasoningLevels: []string{"low", "high"},
-		SupportsImages:  true,
+		Reasoning: catwalk.Reasoning{
+			Thinking:     catwalk.ThinkingToggleable,
+			EffortLevels: catwalk.NewEffortLevels("low", "high"),
+		},
+		Capabilities: catwalk.Capabilities{Vision: true},
 	}}
 	desc, err := agentToolDescriptionFor(capable)
 	require.NoError(t, err)

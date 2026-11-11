@@ -11,7 +11,7 @@ func init() {
 		return
 	}
 	if v == "*" {
-		bannedCommands = nil
+		defaultBlockedCommands = nil
 		return
 	}
 	allow := make(map[string]struct{})
@@ -20,11 +20,11 @@ func init() {
 			allow[c] = struct{}{}
 		}
 	}
-	filtered := make([]string, 0, len(bannedCommands))
-	for _, c := range bannedCommands {
+	filtered := make([]string, 0, len(defaultBlockedCommands))
+	for _, c := range defaultBlockedCommands {
 		if _, ok := allow[c]; !ok {
 			filtered = append(filtered, c)
 		}
 	}
-	bannedCommands = filtered
+	defaultBlockedCommands = filtered
 }

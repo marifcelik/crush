@@ -52,6 +52,33 @@ func TestMessageToProtoToolResult(t *testing.T) {
 	require.False(t, tr.IsError)
 }
 
+// TestMCPChannelEventToProto_RoundTrip verifies that a channel push survives
+// the SSE envelope conversion with its type and rendered <channel> body intact,
+// so client/server sessions receive channel events rather than dropping the
+// payload at the wire.
+func TestMCPChannelEventToProto_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	src := pubsub.Event[mcp.Event]{
+		Type: pubsub.CreatedEvent,
+		Payload: mcp.Event{
+			Type:           mcp.EventChannelMessage,
+			Name:           "webhook",
+			ChannelMessage: `<channel source="webhook">build failed</channel>`,
+		},
+	}
+
+	env := wrapEvent(src)
+	require.NotNil(t, env)
+	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
+
+	var decoded pubsub.Event[proto.MCPEvent]
+	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.Equal(t, proto.MCPEventChannelMessage, decoded.Payload.Type)
+	require.Equal(t, "webhook", decoded.Payload.Name)
+	require.Equal(t, `<channel source="webhook">build failed</channel>`, decoded.Payload.ChannelMessage)
+}
+
 // TestSkillsEventToProto_RoundTrip verifies that a pubsub.Event[skills.Event]
 // can be wrapped, marshaled, and unmarshaled back through the SSE
 // envelope without losing state values or error messages.
@@ -209,27 +236,83 @@ func TestUpdateAvailableMsgToProto_RoundTrip(t *testing.T) {
 	require.False(t, decoded.Payload.IsDevelopment)
 }
 
-// TestMCPChannelMessageNotWrappedAsStateChange verifies that an
-// EventChannelMessage — which has no proto representation until session
-// delivery is wired up in a later PR — is NOT wrapped as a spurious
-// state_changed MCP event by the SSE event pipeline. Before the fix,
-// mcpEventTypeToProto's default branch mapped every unknown event type to
-// MCPEventStateChanged, so a channel notification looked like a state
-// change to every SSE client.
-func TestMCPChannelMessageNotWrappedAsStateChange(t *testing.T) {
+// TestHostThemeEvent_RoundTrip verifies that a host theme event survives
+// the SSE envelope with the double-nested wire shape hosts and TUIs decode:
+// {"type":"host_theme","payload":{"type":"updated","payload":{...}}}.
+func TestHostThemeEvent_RoundTrip(t *testing.T) {
 	t.Parallel()
 
-	src := pubsub.Event[mcp.Event]{
-		Type: pubsub.CreatedEvent,
-		Payload: mcp.Event{
-			Type:           mcp.EventChannelMessage,
-			Name:           "webhook",
-			ChannelMessage: `<channel source="webhook">build failed</channel>`,
+	src := pubsub.Event[proto.HostThemeState]{
+		Type: pubsub.UpdatedEvent,
+		Payload: proto.HostThemeState{
+			WorkspaceID: "w1",
+			Theme: &proto.HostTheme{
+				Name:        "charmtone-dark",
+				Source:      "superjoy",
+				Palette:     map[string]string{"primary": "#6B50FF"},
+				Syntax:      map[string]string{"keyword": "#00A4FF"},
+				Transparent: new(true),
+			},
 		},
 	}
 
 	env := wrapEvent(src)
-	require.Nil(t, env, "EventChannelMessage must not be wrapped as an SSE event (no proto representation yet)")
+	require.NotNil(t, env)
+	require.Equal(t, pubsub.PayloadTypeHostTheme, env.Type)
+	require.Equal(t, "host_theme", env.Type)
+
+	var decoded pubsub.Event[proto.HostThemeState]
+	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.Equal(t, pubsub.UpdatedEvent, decoded.Type)
+	require.Equal(t, "w1", decoded.Payload.WorkspaceID)
+	require.True(t, src.Payload.Theme.Equal(decoded.Payload.Theme))
+
+	// A clear is a deleted event whose theme is null.
+	env = wrapEvent(pubsub.Event[proto.HostThemeState]{
+		Type:    pubsub.DeletedEvent,
+		Payload: proto.HostThemeState{WorkspaceID: "w1"},
+	})
+	require.NotNil(t, env)
+	data, err := json.Marshal(env)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"type":"host_theme","payload":{"type":"deleted","payload":{"workspace_id":"w1","theme":null}}}`,
+		string(data))
+}
+
+// TestMCPStateChangedEventForwardsCounts verifies that the SSE envelope
+// carries prompt and resource counts, not only tool counts. The client TUI
+// renders all three, so dropping the other two made client/server mode
+// under-report what a connected server offers.
+func TestMCPStateChangedEventForwardsCounts(t *testing.T) {
+	t.Parallel()
+
+	src := pubsub.Event[mcp.Event]{
+		Type: pubsub.UpdatedEvent,
+		Payload: mcp.Event{
+			Type:  mcp.EventStateChanged,
+			Name:  "ctx",
+			State: mcp.StateConnected,
+			Counts: mcp.Counts{
+				Tools:     4,
+				Prompts:   2,
+				Resources: 3,
+			},
+		},
+	}
+
+	env := wrapEvent(src)
+	require.NotNil(t, env)
+	require.Equal(t, pubsub.PayloadTypeMCPEvent, env.Type)
+
+	var decoded pubsub.Event[proto.MCPEvent]
+	require.NoError(t, json.Unmarshal(env.Payload, &decoded))
+	require.Equal(t, proto.MCPEventStateChanged, decoded.Payload.Type)
+	require.Equal(t, "ctx", decoded.Payload.Name)
+	require.Equal(t, proto.MCPStateConnected, decoded.Payload.State)
+	require.Equal(t, 4, decoded.Payload.ToolCount)
+	require.Equal(t, 2, decoded.Payload.PromptCount)
+	require.Equal(t, 3, decoded.Payload.ResourceCount)
 }
 
 // TestMCPUnknownEventTypeNotMappedToStateChange verifies that any

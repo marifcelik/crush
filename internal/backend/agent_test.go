@@ -59,6 +59,7 @@ func (c *blockingCoordinator) IsSessionBusy(string) bool                        
 func (c *blockingCoordinator) QueuedPrompts(string) int                          { return 0 }
 func (c *blockingCoordinator) QueuedPromptsList(string) []string                 { return nil }
 func (c *blockingCoordinator) ClearQueue(string)                                 {}
+func (c *blockingCoordinator) AddNote(string, string)                            {}
 func (c *blockingCoordinator) Summarize(context.Context, string) error           { return nil }
 func (c *blockingCoordinator) Model() agent.Model                                { return agent.Model{} }
 func (c *blockingCoordinator) UpdateModels(context.Context) error                { return nil }
@@ -66,6 +67,9 @@ func (c *blockingCoordinator) GenerateTitle(context.Context, string, string)    
 func (c *blockingCoordinator) ContextUsage(context.Context, string) (agent.ContextUsage, error) {
 	return agent.ContextUsage{}, nil
 }
+func (c *blockingCoordinator) SetHostContext(proto.HostContext) {}
+func (c *blockingCoordinator) HostContext() proto.HostContext   { return proto.HostContext{} }
+
 func (c *blockingCoordinator) SetMainAgent(agentName string) error {
 	c.lastMainAgentSet.Store(agentName)
 	return c.setMainAgentErr
@@ -223,4 +227,8 @@ func TestSetMainAgent_PropagatesCoordinatorError(t *testing.T) {
 
 	err := b.SetMainAgent(ws.ID, "123")
 	require.ErrorIs(t, err, wantErr)
+}
+
+func (*blockingCoordinator) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
 }

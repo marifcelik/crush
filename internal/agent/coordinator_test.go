@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"testing"
 
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy"
 	"charm.land/fantasy/providers/anthropic"
 	"charm.land/fantasy/providers/bedrock"
 	"charm.land/fantasy/providers/openaicompat"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/discover"
+	"github.com/charmbracelet/crush/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +35,6 @@ func (m *mockSessionAgent) BeginAccepted(sessionID string) *AcceptedRun {
 }
 
 func (m *mockSessionAgent) Model() Model                        { return m.model }
-func (m *mockSessionAgent) SetModels(large, small Model)        {}
 func (m *mockSessionAgent) SetTools(tools []fantasy.AgentTool)  {}
 func (m *mockSessionAgent) SetSystemPrompt(systemPrompt string) {}
 func (m *mockSessionAgent) ContextUsage(ctx context.Context, sessionID string) (ContextUsage, error) {
@@ -49,14 +49,18 @@ func (m *mockSessionAgent) IsBusy() bool                                { return
 func (m *mockSessionAgent) QueuedPrompts(sessionID string) int          { return 0 }
 func (m *mockSessionAgent) QueuedPromptsList(sessionID string) []string { return nil }
 func (m *mockSessionAgent) ClearQueue(sessionID string)                 {}
+func (m *mockSessionAgent) AddNote(sessionID, text string)              {}
 func (m *mockSessionAgent) Summarize(context.Context, string, fantasy.ProviderOptions, func(context.Context, *fantasy.ProviderError) error) error {
 	return nil
 }
 func (m *mockSessionAgent) GenerateTitle(context.Context, string, string) {}
+func (m *mockSessionAgent) ListSettledMessages(context.Context, string) ([]message.Message, error) {
+	return nil, nil
+}
 
 // newTestCoordinator creates a minimal coordinator for unit testing runSubAgent.
 func newTestCoordinator(t *testing.T, env fakeEnv, providerID string, providerCfg config.ProviderConfig) *coordinator {
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 	cfg.Config().Providers.Set(providerID, providerCfg)
 	return &coordinator{
@@ -90,15 +94,6 @@ func agentResultWithText(text string) *fantasy.AgentResult {
 			},
 		},
 	}
-}
-
-func TestCopilotResponsesModels(t *testing.T) {
-	t.Parallel()
-
-	for _, modelID := range []string{"gpt-6-astra", "grok-4.5", "grok-4.6"} {
-		assert.True(t, copilotResponsesModels[modelID], modelID)
-	}
-	assert.False(t, copilotResponsesModels["gpt-4.1"])
 }
 
 func TestRunSubAgent(t *testing.T) {
@@ -197,7 +192,33 @@ func TestRunSubAgent(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, resp.IsError)
-		assert.Equal(t, "Sub-agent completed but produced no text output.", resp.Content)
+		assert.Equal(t, "Subagent completed but produced no text output.", resp.Content)
+	})
+
+	t.Run("refused or truncated run says why it stopped", func(t *testing.T) {
+		narration := fantasy.ResponseContent{fantasy.TextContent{Text: "Now processes, network, and systemd state."}}
+		for _, tc := range []struct {
+			reason fantasy.FinishReason
+			want   string
+		}{
+			{fantasy.FinishReasonContentFilter, subAgentRefused},
+			{fantasy.FinishReasonLength, subAgentTruncated},
+		} {
+			resp := subAgentResponse(&fantasy.AgentResult{
+				Steps: []fantasy.StepResult{
+					{Response: fantasy.Response{Content: narration, FinishReason: fantasy.FinishReasonToolCalls}},
+					{Response: fantasy.Response{FinishReason: tc.reason}},
+				},
+				Response: fantasy.Response{Content: narration},
+			})
+			assert.True(t, resp.IsError, tc.reason)
+			assert.Equal(t, tc.want, resp.Content, "earlier narration must not pass for a report")
+		}
+
+		resp := subAgentResponse(&fantasy.AgentResult{
+			Steps: []fantasy.StepResult{{Response: fantasy.Response{Content: narration, FinishReason: fantasy.FinishReasonContentFilter}}},
+		})
+		assert.Equal(t, subAgentRefused+"\n\nIts last output before stopping:\n\n"+narration.Text(), resp.Content)
 	})
 
 	t.Run("empty result returns error response", func(t *testing.T) {
@@ -221,7 +242,7 @@ func TestRunSubAgent(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, resp.IsError)
-		assert.Equal(t, "Sub-agent completed but produced no text output.", resp.Content)
+		assert.Equal(t, "Subagent completed but produced no text output.", resp.Content)
 	})
 
 	t.Run("ModelCfg.MaxTokens overrides default", func(t *testing.T) {
@@ -397,7 +418,7 @@ func TestRunSubAgent(t *testing.T) {
 func TestUpdateParentSessionCost(t *testing.T) {
 	t.Run("accumulates cost correctly", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 
@@ -422,7 +443,7 @@ func TestUpdateParentSessionCost(t *testing.T) {
 
 	t.Run("accumulates multiple child costs", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 
@@ -453,7 +474,7 @@ func TestUpdateParentSessionCost(t *testing.T) {
 
 	t.Run("child session not found", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 
@@ -467,7 +488,7 @@ func TestUpdateParentSessionCost(t *testing.T) {
 
 	t.Run("parent session not found", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 
@@ -483,7 +504,7 @@ func TestUpdateParentSessionCost(t *testing.T) {
 
 	t.Run("zero cost handled correctly", func(t *testing.T) {
 		env := testEnv(t)
-		cfg, err := config.Init(env.workingDir, "", false)
+		cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 		require.NoError(t, err)
 		coord := &coordinator{cfg: cfg, sessions: env.sessions}
 
@@ -515,9 +536,11 @@ func TestGetProviderOptionsReasoningEffort(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			model := Model{
 				CatwalkCfg: catwalk.Model{
-					ID:              "claude-opus-4-7",
-					CanReason:       true,
-					ReasoningLevels: []string{"max"},
+					ID: "claude-opus-4-7",
+					Reasoning: catwalk.Reasoning{
+						Thinking:     catwalk.ThinkingToggleable,
+						EffortLevels: catwalk.NewEffortLevels("max"),
+					},
 				},
 				ModelCfg: config.SelectedModel{
 					Provider:        "test",
@@ -572,9 +595,11 @@ func TestGetProviderOptionsReasoningEffortCustomProvider(t *testing.T) {
 		t.Run(providerType, func(t *testing.T) {
 			model := Model{
 				CatwalkCfg: catwalk.Model{
-					ID:              "qwen/qwen3-8b",
-					CanReason:       true,
-					ReasoningLevels: []string{"low", "medium", "high"},
+					ID: "qwen/qwen3-8b",
+					Reasoning: catwalk.Reasoning{
+						Thinking:     catwalk.ThinkingToggleable,
+						EffortLevels: catwalk.NewEffortLevels("low", "medium", "high"),
+					},
 				},
 				ModelCfg: config.SelectedModel{
 					Provider:        "local",
@@ -599,9 +624,11 @@ func TestGetProviderOptionsReasoningEffortCustomProvider(t *testing.T) {
 func TestGetProviderOptionsReasoningEffortFallback(t *testing.T) {
 	model := Model{
 		CatwalkCfg: catwalk.Model{
-			ID:              "glm-5.2",
-			CanReason:       true,
-			ReasoningLevels: []string{"high", "max"},
+			ID: "glm-5.2",
+			Reasoning: catwalk.Reasoning{
+				Thinking:     catwalk.ThinkingToggleable,
+				EffortLevels: catwalk.NewEffortLevels("high", "max"),
+			},
 		},
 		ModelCfg: config.SelectedModel{
 			Provider: "zai",
@@ -829,7 +856,7 @@ func TestCoordinatorSetMainAgent(t *testing.T) {
 
 func TestLargeModelCfgFor(t *testing.T) {
 	env := testEnv(t)
-	cfg, err := config.Init(env.workingDir, "", false)
+	cfg, err := config.Init(t.Context(), env.workingDir, "", false)
 	require.NoError(t, err)
 
 	regular := config.SelectedModel{Provider: "testprov", Model: "regular"}
@@ -889,10 +916,12 @@ func TestApplyReasoningEffort(t *testing.T) {
 	newModel := func() Model {
 		return Model{
 			CatwalkCfg: catwalk.Model{
-				ID:              "test-model",
-				Name:            "Test Model",
-				CanReason:       true,
-				ReasoningLevels: []string{"low", "medium", "high"},
+				ID:   "test-model",
+				Name: "Test Model",
+				Reasoning: catwalk.Reasoning{
+					Thinking:     catwalk.ThinkingToggleable,
+					EffortLevels: catwalk.NewEffortLevels("low", "medium", "high"),
+				},
 			},
 			ModelCfg: config.SelectedModel{ReasoningEffort: "medium"},
 		}
@@ -936,7 +965,7 @@ func TestApplyReasoningEffort(t *testing.T) {
 
 	t.Run("reasoning-incapable model errors", func(t *testing.T) {
 		m := newModel()
-		m.CatwalkCfg.CanReason = false
+		m.CatwalkCfg.Reasoning.Thinking = catwalk.ThinkingNever
 		err := applyReasoningEffort(&m, "low")
 		require.ErrorContains(t, err, "does not support reasoning")
 	})

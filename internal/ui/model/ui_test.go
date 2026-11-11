@@ -7,11 +7,12 @@ import (
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/catwalk/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/agent/notify"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/message"
+	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/ui/attachments"
 	"github.com/charmbracelet/crush/internal/ui/chat"
@@ -21,6 +22,7 @@ import (
 	"github.com/charmbracelet/crush/internal/ui/util"
 	"github.com/charmbracelet/crush/internal/workspace"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,7 +67,7 @@ func TestCurrentModelSupportsImages(t *testing.T) {
 		providers.Set("test-provider", config.ProviderConfig{
 			ID: "test-provider",
 			Models: []catwalk.Model{
-				{ID: "test-model", SupportsImages: true},
+				{ID: "test-model", Capabilities: catwalk.Capabilities{Vision: true}},
 			},
 		})
 
@@ -84,6 +86,145 @@ func TestCurrentModelSupportsImages(t *testing.T) {
 
 		ui := newTestUIWithConfig(t, cfg)
 		require.True(t, ui.currentModelSupportsImages())
+	})
+}
+
+func TestCurrentModelSupportsAudio(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns false when config is nil", func(t *testing.T) {
+		t.Parallel()
+
+		ui := newTestUIWithConfig(t, nil)
+		require.False(t, ui.currentModelSupportsAudio())
+	})
+
+	t.Run("returns false when coder agent is missing", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			Providers: csync.NewMap[string, config.ProviderConfig](),
+			Agents:    map[string]config.Agent{},
+		}
+		ui := newTestUIWithConfig(t, cfg)
+		require.False(t, ui.currentModelSupportsAudio())
+	})
+
+	t.Run("returns false when model is not found", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &config.Config{
+			Providers: csync.NewMap[string, config.ProviderConfig](),
+			Agents: map[string]config.Agent{
+				config.AgentCoder: {Model: config.SelectedModelTypeLarge},
+			},
+		}
+		ui := newTestUIWithConfig(t, cfg)
+		require.False(t, ui.currentModelSupportsAudio())
+	})
+
+	t.Run("returns true when current model supports audio", func(t *testing.T) {
+		t.Parallel()
+
+		providers := csync.NewMap[string, config.ProviderConfig]()
+		providers.Set("test-provider", config.ProviderConfig{
+			ID: "test-provider",
+			Models: []catwalk.Model{
+				{ID: "test-model", Capabilities: catwalk.Capabilities{Audio: true}},
+			},
+		})
+
+		cfg := &config.Config{
+			Models: map[config.SelectedModelType]config.SelectedModel{
+				config.SelectedModelTypeLarge: {
+					Provider: "test-provider",
+					Model:    "test-model",
+				},
+			},
+			Providers: providers,
+			Agents: map[string]config.Agent{
+				config.AgentCoder: {Model: config.SelectedModelTypeLarge},
+			},
+		}
+
+		ui := newTestUIWithConfig(t, cfg)
+		require.True(t, ui.currentModelSupportsAudio())
+	})
+
+	t.Run("returns false when audio capability is unset", func(t *testing.T) {
+		t.Parallel()
+
+		providers := csync.NewMap[string, config.ProviderConfig]()
+		providers.Set("test-provider", config.ProviderConfig{
+			ID: "test-provider",
+			Models: []catwalk.Model{
+				{ID: "test-model", Capabilities: catwalk.Capabilities{Vision: true}},
+			},
+		})
+
+		cfg := &config.Config{
+			Models: map[config.SelectedModelType]config.SelectedModel{
+				config.SelectedModelTypeLarge: {
+					Provider: "test-provider",
+					Model:    "test-model",
+				},
+			},
+			Providers: providers,
+			Agents: map[string]config.Agent{
+				config.AgentCoder: {Model: config.SelectedModelTypeLarge},
+			},
+		}
+
+		ui := newTestUIWithConfig(t, cfg)
+		require.False(t, ui.currentModelSupportsAudio())
+	})
+}
+
+func TestAttachmentsLimit(t *testing.T) {
+	t.Parallel()
+
+	newCfg := func(maxAttachments int) *config.Config {
+		providers := csync.NewMap[string, config.ProviderConfig]()
+		providers.Set("test-provider", config.ProviderConfig{
+			ID: "test-provider",
+			Models: []catwalk.Model{
+				{ID: "test-model", MaxAttachments: maxAttachments},
+			},
+		})
+		return &config.Config{
+			Models: map[config.SelectedModelType]config.SelectedModel{
+				config.SelectedModelTypeLarge: {
+					Provider: "test-provider",
+					Model:    "test-model",
+				},
+			},
+			Providers: providers,
+			Agents: map[string]config.Agent{
+				config.AgentCoder: {Model: config.SelectedModelTypeLarge},
+			},
+		}
+	}
+
+	t.Run("no limit when the model does not set max_attachments", func(t *testing.T) {
+		t.Parallel()
+
+		ui := newTestUIWithConfig(t, newCfg(0))
+		require.Zero(t, ui.currentModelMaxAttachments())
+		require.False(t, ui.attachmentsLimitReached())
+	})
+
+	t.Run("limit reached when pending attachments hit max_attachments", func(t *testing.T) {
+		t.Parallel()
+
+		ui := newTestUIWithConfig(t, newCfg(2))
+		ui.attachments = attachments.New(nil, attachments.Keymap{})
+		require.False(t, ui.attachmentsLimitReached())
+
+		ui.attachments.Update(message.Attachment{FileName: "a.png"})
+		require.False(t, ui.attachmentsLimitReached())
+
+		ui.attachments.Update(message.Attachment{FileName: "b.png"})
+		require.True(t, ui.attachmentsLimitReached())
 	})
 }
 
@@ -129,8 +270,9 @@ type testWorkspace struct {
 	agentReady        bool
 	agentBusy         bool
 	runPrompts        []string
-	yolo              bool
+	permMode          permission.PermissionMode
 	runHidden         []bool
+	compactCalls      []bool
 }
 
 func (w *testWorkspace) Config() *config.Config {
@@ -155,15 +297,23 @@ func (w *testWorkspace) AgentModel() workspace.AgentModel {
 	return workspace.AgentModel{}
 }
 
-func (w *testWorkspace) PermissionSkipRequests() bool { return w.yolo }
+func (w *testWorkspace) PermissionMode() permission.PermissionMode {
+	return w.permMode
+}
 
-func (w *testWorkspace) PermissionSetSkipRequests(skip bool) { w.yolo = skip }
+func (w *testWorkspace) PermissionSetMode(mode permission.PermissionMode) {
+	w.permMode = mode
+}
 
 func (w *testWorkspace) AgentIsReady() bool {
 	return w.agentReady
 }
 
 func (w *testWorkspace) AgentIsBusy() bool {
+	return w.agentBusy
+}
+
+func (w *testWorkspace) AgentIsSessionBusy(string) bool {
 	return w.agentBusy
 }
 
@@ -180,6 +330,11 @@ func (w *testWorkspace) AgentRun(ctx context.Context, _ string, prompt string, _
 	return nil
 }
 
+func (w *testWorkspace) SetCompactMode(scope config.Scope, compact bool) error {
+	w.compactCalls = append(w.compactCalls, compact)
+	return nil
+}
+
 func TestDefaultKeyMapHasShiftTab(t *testing.T) {
 	t.Parallel()
 
@@ -191,18 +346,22 @@ func TestToggleInputMode(t *testing.T) {
 	t.Parallel()
 	ui, ws := newPlanUI(t, "sess-1")
 	ui.mode = uiInputModeCode
+	// The Shift+Tab cycle: code -> plan -> YOLO -> sysadmin -> code. Only
+	// the two input-mode changes switch agents, so the update count stops
+	// climbing once the cycle is only moving the permission mode.
 	for _, want := range []struct {
 		mode    uiInputMode
-		yolo    bool
+		perm    permission.PermissionMode
 		updates int
 	}{
-		{uiInputModePlan, false, 1},
-		{uiInputModeCode, true, 2},
-		{uiInputModeCode, false, 2},
+		{uiInputModePlan, permission.PermissionModeNormal, 1},
+		{uiInputModeCode, permission.PermissionModeYolo, 2},
+		{uiInputModeCode, permission.PermissionModeSysadmin, 2},
+		{uiInputModeCode, permission.PermissionModeNormal, 2},
 	} {
 		applyModeSwitchMsg(ui, ui.toggleInputMode())
 		require.Equal(t, want.mode, ui.mode)
-		require.Equal(t, want.yolo, ws.yolo)
+		require.Equal(t, want.perm, ws.permMode)
 		require.Equal(t, want.updates, ws.updateCalls)
 	}
 }
@@ -234,6 +393,18 @@ func newPlanUI(t *testing.T, sessionID string) (*UI, *testWorkspace) {
 	return u, ws
 }
 
+// seedYolo puts the workspace and the UI's memoized permission mode in the
+// same state the running UI keeps them in: every write goes through
+// setPermissionMode, so the cache never trails the workspace.
+func seedYolo(u *UI, ws *testWorkspace, on bool) {
+	mode := permission.PermissionModeNormal
+	if on {
+		mode = permission.PermissionModeYolo
+	}
+	ws.PermissionSetMode(mode)
+	u.permModeCache.set(mode)
+}
+
 // applyModeSwitchMsg runs a setInputMode command to completion the way the
 // real event loop does: execute the async switch, then feed the resulting
 // modeSwitchedMsg through the finalizer. Returns the finalizer's cmds so
@@ -261,6 +432,66 @@ func TestHandlePlanHandoff_MarkerOpensInline(t *testing.T) {
 		Text:      "Here is the plan.\n<!-- CRUSH_PLAN_READY -->",
 	})
 	require.True(t, isPlanHandoffInline(u))
+}
+
+func TestToggleSidebarKeyBinding(t *testing.T) {
+	t.Parallel()
+
+	sty := styles.CharmtonePantera()
+	ws := &testWorkspace{cfg: &config.Config{
+		Providers: csync.NewMap[string, config.ProviderConfig](),
+	}}
+	com := &common.Common{Workspace: ws, Styles: &sty}
+	keyMap := DefaultKeyMap()
+	att := attachments.New(nil, attachments.Keymap{
+		DeleteMode: keyMap.Editor.AttachmentDeleteMode,
+		DeleteAll:  keyMap.Editor.DeleteAllAttachments,
+		Escape:     keyMap.Editor.Escape,
+	})
+	u := &UI{
+		com:         com,
+		keyMap:      keyMap,
+		state:       uiChat,
+		focus:       uiFocusSidebar,
+		session:     &session.Session{ID: "sess-1"},
+		chat:        NewChat(com, config.ScrollbarDefault),
+		textarea:    textarea.New(),
+		dialog:      dialog.NewOverlay(),
+		attachments: att,
+		width:       140,
+		height:      45,
+	}
+	u.status = NewStatus(com, u)
+
+	// Ctrl+b hides the sidebar and moves focus off it, persisting compact
+	// mode.
+	u.handleKeyPressMsg(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	require.True(t, u.forceCompactMode)
+	require.True(t, u.isCompact)
+	require.Equal(t, uiFocusEditor, u.focus)
+	require.Equal(t, []bool{true}, ws.compactCalls)
+
+	// Ctrl+b again shows the sidebar.
+	u.handleKeyPressMsg(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	require.False(t, u.forceCompactMode)
+	require.False(t, u.isCompact)
+	require.Equal(t, []bool{true, false}, ws.compactCalls)
+
+	// The binding is advertised in the help bar while the sidebar is
+	// available.
+	var shortHelp []string
+	for _, b := range u.ShortHelp() {
+		shortHelp = append(shortHelp, b.Help().Desc)
+	}
+	require.Contains(t, shortHelp, "toggle sidebar")
+
+	var fullHelp []string
+	for _, row := range u.FullHelp() {
+		for _, b := range row {
+			fullHelp = append(fullHelp, b.Help().Desc)
+		}
+	}
+	require.Contains(t, fullHelp, "toggle sidebar")
 }
 
 func TestHandlePlanHandoff_NoMarkerNoInline(t *testing.T) {
@@ -549,7 +780,7 @@ func TestSetInputMode_TracksModeSwitching(t *testing.T) {
 	require.True(t, ok)
 	require.NoError(t, msg.err)
 	require.Equal(t, uiInputModeCode, msg.mode)
-	require.False(t, msg.yolo)
+	require.Equal(t, permission.PermissionModeNormal, msg.perm)
 }
 
 func TestHandlePlanHandoff_SetsPendingPlan(t *testing.T) {
@@ -659,11 +890,11 @@ func TestPlanHandoffExplicitPermissionMode(t *testing.T) {
 	t.Parallel()
 	for _, yolo := range []bool{false, true} {
 		u, ws := newPlanUI(t, "sess-1")
-		ws.yolo = !yolo
+		seedYolo(u, ws, !yolo)
 		u.openPlanHandoff()
 		inline := u.activeInline.(*dialog.PlanHandoffInline)
 		cmd := inline.OnConfirm(yolo)
-		require.Equal(t, yolo, ws.yolo)
+		require.Equal(t, yolo, ws.permMode != permission.PermissionModeNormal)
 		require.Empty(t, ws.runPrompts, "wait for the coder model to finish switching")
 		switched := cmd().(modeSwitchedMsg)
 		require.NoError(t, switched.err)
@@ -676,7 +907,7 @@ func TestPlanPromptIgnoresYOLO(t *testing.T) {
 	u, _ := newPlanUI(t, "sess-1")
 	u.textarea.SetWidth(40)
 	u.textarea.Focus()
-	u.setEditorPrompt(true)
+	u.setEditorPrompt(permission.PermissionModeYolo)
 	require.Contains(t, u.textarea.View(), "⏸")
 	require.NotContains(t, u.textarea.View(), " ! ")
 }
@@ -697,27 +928,70 @@ func TestGeneratedPlanContinuationIsHidden(t *testing.T) {
 	require.Equal(t, []string{"Implement the plan.", "Implement the plan."}, ws.runPrompts)
 }
 
-func TestToggleInputModePreservesExistingYOLOOnEntry(t *testing.T) {
+// A permissive mode the user chose himself is part of the ring like any
+// other: the cycle picks up where the badge says it is and closes.
+func TestToggleInputModeCycleCompletesFromExplicitYolo(t *testing.T) {
 	t.Parallel()
 	u, ws := newPlanUI(t, "sess-1")
 	u.mode = uiInputModeCode
-	ws.yolo = true
+	seedYolo(u, ws, true)
+
+	for _, want := range []struct {
+		mode uiInputMode
+		perm permission.PermissionMode
+	}{
+		{uiInputModeCode, permission.PermissionModeSysadmin},
+		{uiInputModeCode, permission.PermissionModeNormal},
+		{uiInputModePlan, permission.PermissionModeNormal},
+		{uiInputModeCode, permission.PermissionModeYolo},
+	} {
+		applyModeSwitchMsg(u, u.toggleInputMode())
+		require.Equal(t, want.mode, u.mode)
+		require.Equal(t, want.perm, ws.permMode)
+	}
+}
+
+// Leaving plan mode pulls the user into YOLO coding, but a session already
+// on the sysadmin rung keeps it rather than being knocked down to YOLO.
+func TestToggleInputModeKeepsSysadminLeavingPlan(t *testing.T) {
+	t.Parallel()
+	u, ws := newPlanUI(t, "sess-1")
+	u.setPermissionMode(permission.PermissionModeSysadmin)
+
 	applyModeSwitchMsg(u, u.toggleInputMode())
-	require.Equal(t, uiInputModePlan, u.mode)
-	require.True(t, ws.yolo)
+	require.Equal(t, uiInputModeCode, u.mode)
+	require.Equal(t, permission.PermissionModeSysadmin, ws.permMode)
 }
 
 func TestSwitchPlanToYolo(t *testing.T) {
 	t.Parallel()
 	for _, carriedYolo := range []bool{false, true} {
 		u, ws := newPlanUI(t, "sess-1")
-		ws.yolo = carriedYolo
-		u.cycleYolo = carriedYolo
+		seedYolo(u, ws, carriedYolo)
 
 		applyModeSwitchMsg(u, u.switchPlanToYolo())
 		require.Equal(t, uiInputModeCode, u.mode, "activating YOLO leaves plan mode")
-		require.True(t, ws.yolo, "YOLO ends up enabled regardless of the carried state")
-		require.False(t, u.cycleYolo, "explicit activation must not be undone by the Shift+Tab cycle")
+		require.Equal(t, permission.PermissionModeYolo, ws.permMode, "YOLO ends up enabled regardless of the carried state")
 		require.Equal(t, config.AgentCoder, ws.setMainCalledWith)
+	}
+}
+
+func TestStatusModeBadge(t *testing.T) {
+	t.Parallel()
+	u, _ := newPlanUI(t, "sess-1")
+	s := &Status{com: u.com}
+	for _, tc := range []struct {
+		name  string
+		mode  uiInputMode
+		perm  permission.PermissionMode
+		badge string
+	}{
+		{"code", uiInputModeCode, permission.PermissionModeNormal, ""},
+		{"yolo", uiInputModeCode, permission.PermissionModeYolo, "YOLO MODE"},
+		{"sysadmin", uiInputModeCode, permission.PermissionModeSysadmin, "SYSADMIN MODE"},
+		{"plan wins", uiInputModePlan, permission.PermissionModeSysadmin, "PLAN MODE"},
+	} {
+		s.SetMode(tc.mode, tc.perm)
+		require.Contains(t, ansi.Strip(s.modeBadge()), tc.badge, tc.name)
 	}
 }

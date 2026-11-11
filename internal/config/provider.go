@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/catwalk/pkg/catwalk"
-	"charm.land/catwalk/pkg/embedded"
+	"charm.land/catwalk/v3/pkg/catwalk"
+	"charm.land/catwalk/v3/pkg/embedded"
 	"github.com/charmbracelet/crush/internal/agent/hyper"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/x/etag"
@@ -134,6 +134,15 @@ var (
 	hyperSyncer   = &hyperSync{}
 )
 
+// CatwalkUpdated reports whether the Catwalk provider catalog was
+// refreshed with new data during this run's catalog fetch. The fetch
+// runs once per process, before the first call to Providers returns, so
+// the result is stable afterwards. Callers use it to renew catalogs that
+// shadow Catwalk's, such as the ChatGPT model catalog.
+func CatwalkUpdated() bool {
+	return catwalkSyncer.Updated()
+}
+
 // Providers returns the list of providers, taking into account cached results
 // and whether or not auto update is enabled.
 //
@@ -150,14 +159,21 @@ var (
 // using the returned list. A refresh that simply could not reach the network
 // is not an error at all: the cached or embedded catalog is a sound answer, so
 // those are logged and the fallback is returned.
-func Providers(cfg *Config, opts ...HyperTokenRefresher) ([]catwalk.Provider, error) {
+func Providers(cfg *Config) ([]catwalk.Provider, error) {
+	return LoadProviders(context.Background(), cfg, nil)
+}
+
+// LoadProviders is Providers with a context bounding the catalog fetch and a
+// Hyper token refresher for retrying on 401. Only the first call in a process
+// fetches; later calls return the memoized result and ignore both arguments.
+func LoadProviders(ctx context.Context, cfg *Config, refreshHyper HyperTokenRefresher) ([]catwalk.Provider, error) {
 	providerOnce.Do(func() {
 		var wg sync.WaitGroup
 		providers := csync.NewSlice[catwalk.Provider]()
 		autoupdate := !cfg.Options.DisableProviderAutoUpdate
 		customProvidersOnly := cfg.Options.DisableDefaultProviders
 
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
 
 		// Each goroutine owns its own error so the two can report
@@ -180,7 +196,7 @@ func Providers(cfg *Config, opts ...HyperTokenRefresher) ([]catwalk.Provider, er
 			// providers at all over a transient disk or network problem.
 			items, err := catwalkSyncer.Get(ctx)
 			if err != nil {
-				catwalkURL := fmt.Sprintf("%s/v2/providers", cmp.Or(os.Getenv("CATWALK_URL"), defaultCatwalkURL))
+				catwalkURL := fmt.Sprintf("%s/v3/providers", cmp.Or(os.Getenv("CATWALK_URL"), defaultCatwalkURL))
 				catwalkErr = fmt.Errorf("Crush was unable to fetch an updated list of providers from %s. Consider setting CRUSH_DISABLE_PROVIDER_AUTO_UPDATE=1 to use the embedded providers bundled at the time of this Crush release. You can also update providers manually. For more info see crush update-providers --help.\n\nCause: %w", catwalkURL, err) //nolint:staticcheck
 			}
 			providers.Append(items...)
@@ -192,14 +208,10 @@ func Providers(cfg *Config, opts ...HyperTokenRefresher) ([]catwalk.Provider, er
 			}
 			path := cachePathFor("hyper")
 			cfgSnapshot := cfg
-			var refresher func(context.Context) error
-			if len(opts) > 0 {
-				refresher = opts[0]
-			}
 			hyperSyncer.Init(realHyperClient{
 				baseURL:      hyper.BaseURL(),
 				resolveKey:   func() string { return ResolveHyperAPIKey(cfgSnapshot) },
-				refreshToken: refresher,
+				refreshToken: refreshHyper,
 			}, path, autoupdate)
 
 			// As above: keep whatever provider we were handed. The syncer
@@ -252,7 +264,7 @@ func newCache[T any](path string) cache[T] {
 
 func (c cache[T]) Get() (T, string, error) {
 	var v T
-	data, err := os.ReadFile(c.path)
+	data, err := readFile(c.path)
 	if err != nil {
 		return v, "", fmt.Errorf("failed to read provider cache file: %w", err)
 	}
