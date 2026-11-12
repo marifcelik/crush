@@ -143,12 +143,16 @@ func (c *ContextUsage) categories() []contextUsageCategory {
 	}
 }
 
-// renderSubtitle renders the model name and context window size.
+// renderSubtitle renders the model name, context window size, and the
+// cache hit rate of the most recent request when one is known.
 func (c *ContextUsage) renderSubtitle(t *styles.Styles, contentWidth int) string {
-	if c.modelName == "" && c.contextWindow <= 0 {
+	if c.modelName == "" && c.contextWindow <= 0 && c.usage.CacheHitRate <= 0 {
 		return ""
 	}
 	info := fmt.Sprintf("%s · %s context", c.modelName, formatContextTokens(c.contextWindow))
+	if c.usage.CacheHitRate > 0 {
+		info += fmt.Sprintf(" · %.0f%% cache hit", c.usage.CacheHitRate*100)
+	}
 	return t.Dialog.SecondaryText.Width(contentWidth).Render(info)
 }
 

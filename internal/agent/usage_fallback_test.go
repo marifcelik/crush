@@ -6,6 +6,7 @@ import (
 
 	"charm.land/catwalk/v3/pkg/catwalk"
 	"charm.land/fantasy"
+	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/stretchr/testify/require"
@@ -192,7 +193,7 @@ func TestFallbackStepUsageReturnsZeroWithoutContent(t *testing.T) {
 func TestUpdateSessionUsageSkipsEstimatedCost(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{ID: "session-id", Cost: 1.25}
 	model := Model{CatwalkCfg: catwalk.Model{Pricing: catwalk.Pricing{Input: 10, Output: 20}}}
 	usage := fantasy.Usage{InputTokens: 1000, OutputTokens: 2000}
@@ -208,7 +209,7 @@ func TestUpdateSessionUsageSkipsEstimatedCost(t *testing.T) {
 func TestUpdateSessionUsageCountsCacheTokensAsContext(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	model := Model{CatwalkCfg: catwalk.Model{Pricing: catwalk.Pricing{Input: 10, Output: 20}}}
 
 	// Steady state: most of the prompt is served from cache and the newly
@@ -236,7 +237,7 @@ func TestUpdateSessionUsageCountsCacheTokensAsContext(t *testing.T) {
 func TestUpdateSessionUsageKeepsCountersForZeroUsage(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{
 		ID:               "session-id",
 		PromptTokens:     123,
@@ -255,7 +256,7 @@ func TestUpdateSessionUsageKeepsCountersForZeroUsage(t *testing.T) {
 func TestUpdateSessionUsagePreservesOmittedCountersForPartialUsage(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{
 		ID:               "session-id",
 		PromptTokens:     123,
@@ -273,7 +274,7 @@ func TestUpdateSessionUsagePreservesOmittedCountersForPartialUsage(t *testing.T)
 func TestUpdateSessionUsagePreservesCountersForTotalOnlyUsage(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{
 		ID:               "session-id",
 		PromptTokens:     123,
@@ -291,7 +292,7 @@ func TestUpdateSessionUsagePreservesCountersForTotalOnlyUsage(t *testing.T) {
 func TestUpdateSessionUsagePreservesPromptForOutputOnlyUsage(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{
 		ID:               "session-id",
 		PromptTokens:     123,
@@ -309,7 +310,7 @@ func TestUpdateSessionUsagePreservesPromptForOutputOnlyUsage(t *testing.T) {
 func TestUpdateSessionUsageKeepsCountersForEstimatedZeroUsage(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{
 		ID:               "session-id",
 		PromptTokens:     123,
@@ -343,7 +344,7 @@ func TestSummaryCompletionTokens(t *testing.T) {
 func TestUpdateSessionUsageAddsProviderCost(t *testing.T) {
 	t.Parallel()
 
-	agent := &sessionAgent{}
+	agent := &sessionAgent{lastUsage: csync.NewMap[string, fantasy.Usage]()}
 	currentSession := &session.Session{ID: "session-id", Cost: 1.25}
 	model := Model{CatwalkCfg: catwalk.Model{Pricing: catwalk.Pricing{Input: 10, Output: 20}}}
 	usage := fantasy.Usage{InputTokens: 1000, OutputTokens: 2000}

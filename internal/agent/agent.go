@@ -263,6 +263,10 @@ type sessionAgent struct {
 	// notes are what the host told the agent since its last turn, by
 	// session, to add to the next prompt. They are not chat messages.
 	notes *csync.Map[string, []string]
+	// lastUsage holds the most recent provider-reported usage per session,
+	// so the context usage dialog can report a real cache hit rate. Only
+	// actual (non-estimated) usage is stored; it resets on restart.
+	lastUsage *csync.Map[string, fantasy.Usage]
 	// titles tracks in-flight title generation so CancelAll can drain it.
 	titles *titleTracker
 
@@ -344,6 +348,7 @@ func NewSessionAgent(
 		hooks:                opts.Hooks,
 		messageQueue:         csync.NewMap[string, []SessionAgentCall](),
 		notes:                csync.NewMap[string, []string](),
+		lastUsage:            csync.NewMap[string, fantasy.Usage](),
 		activeRequests:       csync.NewMap[string, *activeCancel](),
 		titles:               cmp.Or(opts.titles, new(titleTracker)),
 		dispatchMu:           csync.NewMap[string, *sync.Mutex](),
@@ -2186,6 +2191,7 @@ func (a *sessionAgent) updateSessionUsage(model Model, session *session.Session,
 
 	if !estimated {
 		a.eventTokensUsed(session.ID, model, usage, cost)
+		a.lastUsage.Set(session.ID, usage)
 	}
 
 	if estimated {

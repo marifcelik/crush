@@ -120,3 +120,14 @@ func TestContextUsage_LineWidth(t *testing.T) {
 		require.LessOrEqual(t, lipgloss.Width(line), 60)
 	}
 }
+
+func TestContextUsage_SubtitleCacheHit(t *testing.T) {
+	t.Parallel()
+
+	c := newTestContextUsage()
+	// Without provider cache data the subtitle omits the rate.
+	require.NotContains(t, ansi.Strip(c.renderSubtitle(c.com.Styles, 60)), "cache hit")
+
+	c.SetUsage(workspace.ContextUsage{CacheHitRate: 0.87})
+	require.Contains(t, ansi.Strip(c.renderSubtitle(c.com.Styles, 60)), "87% cache hit")
+}

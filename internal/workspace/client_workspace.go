@@ -357,6 +357,7 @@ func (w *ClientWorkspace) AgentContextUsage(ctx context.Context, sessionID strin
 		SystemTools:    usage.SystemTools,
 		Skills:         usage.Skills,
 		Subagents:      usage.Subagents,
+		CacheHitRate:   usage.CacheHitRate,
 	}, nil
 }
 

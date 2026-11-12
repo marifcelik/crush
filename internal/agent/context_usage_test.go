@@ -110,3 +110,27 @@ func TestToolInfoTokens(t *testing.T) {
 	require.Greater(t, tokens, int64(0))
 	require.Less(t, tokens, int64(50))
 }
+
+func TestContextUsageCacheHitRate(t *testing.T) {
+	env := testEnv(t)
+	agent := testSessionAgent(env, nil, nil, "test prompt").(*sessionAgent)
+
+	sess, err := env.sessions.Create(t.Context(), "test")
+	require.NoError(t, err)
+
+	// No provider usage recorded yet: the rate is zero, not a guess.
+	usage, err := agent.ContextUsage(t.Context(), sess.ID)
+	require.NoError(t, err)
+	require.Zero(t, usage.CacheHitRate)
+
+	// 300 of 500 prompt tokens (100 input + 300 cache read + 100 cache
+	// creation) came from cache.
+	agent.lastUsage.Set(sess.ID, fantasy.Usage{
+		InputTokens:         100,
+		CacheReadTokens:     300,
+		CacheCreationTokens: 100,
+	})
+	usage, err = agent.ContextUsage(t.Context(), sess.ID)
+	require.NoError(t, err)
+	require.InDelta(t, 0.6, usage.CacheHitRate, 1e-9)
+}

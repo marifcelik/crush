@@ -173,6 +173,7 @@ func (b *Backend) GetAgentContextUsage(ctx context.Context, workspaceID, session
 		SystemTools:    usage.SystemTools,
 		Skills:         usage.Skills,
 		Subagents:      usage.Subagents,
+		CacheHitRate:   usage.CacheHitRate,
 	}, nil
 }
 

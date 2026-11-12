@@ -133,6 +133,9 @@ type ContextUsage struct {
 	SystemTools    int64
 	Skills         int64
 	Subagents      int64
+	// CacheHitRate is the fraction (0..1) of prompt tokens served from
+	// cache on the most recent provider request; 0 when unavailable.
+	CacheHitRate float64
 }
 
 // Total returns the sum of every category.

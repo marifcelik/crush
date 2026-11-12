@@ -270,6 +270,7 @@ func (w *AppWorkspace) AgentContextUsage(ctx context.Context, sessionID string) 
 		SystemTools:    usage.SystemTools,
 		Skills:         usage.Skills,
 		Subagents:      usage.Subagents,
+		CacheHitRate:   usage.CacheHitRate,
 	}, nil
 }
 

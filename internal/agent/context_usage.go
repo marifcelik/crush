@@ -28,6 +28,11 @@ type ContextUsage struct {
 	SystemTools    int64 `json:"system_tools"`
 	Skills         int64 `json:"skills"`
 	Subagents      int64 `json:"subagents"`
+	// CacheHitRate is the fraction (0..1) of prompt tokens served from
+	// cache on the session's most recent provider request. Unlike the
+	// token estimates above it is actual provider data; it is 0 until a
+	// real (non-estimated) usage has been recorded, e.g. after a restart.
+	CacheHitRate float64 `json:"cache_hit_rate"`
 }
 
 // Total returns the sum of every category.
@@ -71,6 +76,11 @@ func (a *sessionAgent) ContextUsage(ctx context.Context, sessionID string) (Cont
 			usage.Subagents += tokens
 		} else {
 			usage.SystemTools += tokens
+		}
+	}
+	if last, ok := a.lastUsage.Get(sessionID); ok {
+		if total := contextTokens(last); total > 0 {
+			usage.CacheHitRate = float64(last.CacheReadTokens) / float64(total)
 		}
 	}
 	return usage, nil

@@ -173,6 +173,9 @@ type ContextUsage struct {
 	SystemTools    int64 `json:"system_tools"`
 	Skills         int64 `json:"skills"`
 	Subagents      int64 `json:"subagents"`
+	// CacheHitRate is the fraction (0..1) of prompt tokens served from
+	// cache on the most recent provider request; 0 when unavailable.
+	CacheHitRate float64 `json:"cache_hit_rate"`
 }
 
 // AgentMessage represents a message sent to the agent.
